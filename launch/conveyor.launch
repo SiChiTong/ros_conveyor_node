@@ -1,0 +1,5 @@
+<launch>
+    <node name="conveyor_node" pkg="conveyor" type="conveyor_node" respawn="true" />
+    <rosparam file="$(find conveyor)/config/conveyor.yaml" command="load"/>
+
+</launch>

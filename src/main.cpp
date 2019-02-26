@@ -1,0 +1,68 @@
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include "std_msgs/UInt8MultiArray.h"
+#include <signal.h>
+#include <stdio.h>
+#include <vector>
+#include <iostream>
+#include <pthread.h>
+
+#include <conveyor.h>
+
+class Conveyor;
+
+void sigintHandler(int sig)
+{
+    ROS_INFO("killing on exit");
+    ros::shutdown();
+}
+
+int main(int argc, char **argv)
+{
+    ros::init(argc, argv, "conveyor_node");
+    bool is_log_on = 0;
+    ROS_INFO("creating conveyor node...");
+    Conveyor *conveyor = new Conveyor(is_log_on);
+    float rate = 1000;
+    ros::Rate loop_rate(rate);
+    uint32_t cnt = 0;
+    bool flag = 0;
+    pthread_t can_protocol_proc_handle;
+    pthread_create(&can_protocol_proc_handle, NULL, CanProtocolProcess,(void*)conveyor);
+
+    get_version_t get_version;
+    conveyor_belt_t set_conveyor_belt_work_mode;
+
+    get_version.get_version_type = 1;
+
+    set_conveyor_belt_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_LOAD;
+
+    while (ros::ok())
+    {
+        if(flag == 0)
+        {
+            if(cnt % (uint32_t)(rate * 2) == (uint32_t)rate/2)
+            {
+                flag = 1;
+                do
+                {
+                    boost::mutex::scoped_lock(conveyor->mtx);
+
+                    get_version.get_version_type = 2;
+                    conveyor->get_version_vector.push_back(get_version);
+
+                    get_version.get_version_type = 3;
+                    conveyor->get_version_vector.push_back(get_version);
+
+                    conveyor->set_conveyor_belt_work_mode_vector.push_back(set_conveyor_belt_work_mode);
+
+
+                }while(0);
+            }
+        }
+        cnt++;
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
+
+}
