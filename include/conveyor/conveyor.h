@@ -5,12 +5,10 @@
 #include <roscan/can_long_frame.h>
 #include <boost/thread/mutex.hpp>
 using json = nlohmann::json;
-#ifndef LED_H
-#define LED_H
+#ifndef __DRIVER_CONVEYOR_H__
+#define __DRIVER_CONVEYOR_H__
 
-
-
-#define NOAH_CONVEYOR_CAN_SRCMAC_ID   0x52
+#define CONVEYOR_CAN_SRCMAC_ID   0x53
 
 //////  function id define  //////
 #define CAN_FUN_ID_RESET        0x06
@@ -23,14 +21,11 @@ using json = nlohmann::json;
 #define CAN_SOURCE_ID_READ_VERSION      0x01
 
 #define CAN_SOURCE_ID_GET_SYS_STATE                 0x83
-#define CAN_SOURCE_ID_GET_ERR_STATE                 0x84
 #define CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE   0xa0
 
 #define HW_VERSION_SIZE             3
 #define SW_VERSION_SIZE             16
 #define PROTOCOL_VERSION_SIZE       14
-
-
 
 
 typedef struct
@@ -50,7 +45,6 @@ typedef struct
 }get_version_t;
 
 
-
 typedef struct
 {
     uint8_t get_version_type;
@@ -60,12 +54,17 @@ typedef struct
 }get_version_ack_t;
 
 
+enum
+{
+
+    CONVEYOR_BELT_STATUS_STOP = 0,
+    CONVEYOR_BELT_STATUS_LOAD,
+    CONVEYOR_BELT_STATUS_UNLOAD,
+    CONVEYOR_BELT_STATUS_MAX,
+}conveyor_status_e;
 
 typedef struct
 {
-#define CONVEYOR_BELT_STATUS_STOP       0
-#define CONVEYOR_BELT_STATUS_LOAD       1
-#define CONVEYOR_BELT_STATUS_UNLOAD     2
     uint8_t set_work_mode;
     uint8_t set_result;
     uint8_t ack_work_mode;
@@ -77,7 +76,6 @@ typedef struct
 
 typedef struct
 {
-
 #define VERSION_TYPE_FW             0
 #define VERSION_TYPE_PROTOCOL       1
     uint8_t                     get_version_type;
@@ -85,27 +83,9 @@ typedef struct
     std::string                 hw_version;
     std::string                 sw_version;
     std::string                 protocol_version;
-    std::string                 serials_leds_mcu_version;
-
-#define SYS_STATUS_OFF              0
-#define SYS_STATUS_TURNING_ON       1
-#define SYS_STATUS_ON               2
-#define SYS_STATUS_TURNING_OFF      3
-#define SYS_STATUS_ERR              4
-#define                 STATE_IS_CHARGING       0x10
-#define                 STATE_IS_LOW_POWER      0x20
-#define                 STATE_IS_AUTO_UPLOAD    0x40
-#define                 STATE_IS_CHARGER_IN     0x80
-#define                 SYSTEM_IS_SLEEP         0x00 //set 0x00 to no use
-
-#define                 STATE_IS_RECHARGE_IN    0x0100
 
     uint16_t                     sys_status;
-
     conveyor_belt_t             conveyor_belt;
-
-#define SEND_DATA_BUF_LEN           255
-    uint8_t                     send_data_buf[SEND_DATA_BUF_LEN];
 }conveyor_t;
 
 extern conveyor_t    *sys_conveyor;
@@ -119,9 +99,11 @@ class Conveyor
             noah_conveyor_pub = n.advertise<std_msgs::String>("tx_noah_conveyor_node",1000);
             noah_conveyor_sub = n.subscribe("rx_noah_conveyor_node",1000,&Conveyor::from_app_rcv_callback,this);
 
-            pub_to_can_node = n.advertise<mrobot_msgs::vci_can>("noah_conveyor_to_can", 1000);
+            pub_to_can_node = n.advertise<mrobot_msgs::vci_can>("conveyor_to_can", 1000);
 
-            sub_from_can_node = n.subscribe("can_to_noah_conveyor", 1000, &Conveyor::rcv_from_can_node_callback, this);
+            sub_from_can_node = n.subscribe("can_to_conveyor", 1000, &Conveyor::rcv_from_can_node_callback, this);
+            sub_conveyor_work_mode_test = n.subscribe("/conveyor_work_mode_test", 1000, &Conveyor::work_mode_test_callback, this);
+
 
             sys_conveyor = &sys_conveyor_ram;
             sys_conveyor->sys_status = 0;
@@ -133,7 +115,7 @@ class Conveyor
         int GetVersion(conveyor_t *sys);
         int GetSysStatus(conveyor_t *sys);
         int get_serials_leds_version(conveyor_t *sys);
-        int set_conveyor_belt_work_mode(conveyor_t *sys);
+        int set_conveyor_belt_work_mode(uint8_t mode);
 
         int handle_receive_data(conveyor_t *sys);
         void from_app_rcv_callback(const std_msgs::String::ConstPtr &msg);
@@ -142,6 +124,7 @@ class Conveyor
         void PubChargeStatus(uint8_t status);
 
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
+        void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
 
         json j;
         void pub_json_msg_to_app(const nlohmann::json j_msg);
@@ -164,14 +147,13 @@ class Conveyor
         bool is_log_on;
 
     private:
-        uint8_t CalCheckSum(uint8_t *data, uint8_t len);
-        int handle_rev_frame(conveyor_t *sys,unsigned char * frame_buf);
 
         ros::NodeHandle n;
         ros::Publisher noah_conveyor_pub;
         ros::Subscriber noah_conveyor_sub;
         ros::Publisher pub_to_can_node;//publish to roscan node
         ros::Subscriber sub_from_can_node;
+        ros::Subscriber sub_conveyor_work_mode_test;
 
         conveyor_t    sys_conveyor_ram;
 
@@ -180,10 +162,8 @@ class Conveyor
         std::string protocol_version_param = "noah_conveyor_protocol_version";
 
 };
-int handle_receive_data(conveyor_t *sys);
 
 void *CanProtocolProcess(void* arg);
-
 
 #endif
 

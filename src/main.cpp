@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 
     get_version.get_version_type = 1;
 
-    set_conveyor_belt_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_LOAD;
+    set_conveyor_belt_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_STOP;
 
     while (ros::ok())
     {

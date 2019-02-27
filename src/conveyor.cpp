@@ -331,7 +331,7 @@ get_version_restart:
             do
             {
                 boost::mutex::scoped_lock(mtx);
-                pConveyor->set_conveyor_belt_work_mode_vector.clear();
+                pConveyor->set_conveyor_belt_work_mode_ack_vector.clear();
             }while(0);
 
 set_conveyor_belt_work_mode_restart:
@@ -341,7 +341,7 @@ set_conveyor_belt_work_mode_restart:
             }
             pConveyor->sys_conveyor->conveyor_belt = set_conveyor_belt_mode;
 
-            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor);
+            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor->conveyor_belt.set_work_mode);
             bool set_conveyor_belt_work_mode_ack_flag = 0;
             conveyor_belt_t set_conveyor_belt_work_mode_ack;
             while(time_out_cnt < SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT / 10)
@@ -426,7 +426,7 @@ set_conveyor_belt_work_mode_restart:
                 time_out_cnt = 0;
                 if(err_cnt++ < SET_CONVEYOR_BELT_WORK_MODE_RETRY_CNT)
                 {
-                    ROS_ERROR("set remote power ctrl start to resend msg....");
+                    ROS_ERROR("set conveyor work mode start to resend msg....");
                     goto set_conveyor_belt_work_mode_restart;
                 }
                 ROS_ERROR("CAN NOT COMMUNICATE with conveyor mcu, set conveyor belt work mode failed !");
@@ -457,7 +457,7 @@ int Conveyor::GetVersion(conveyor_t *sys)      // done
     memset(&id, 0x0, sizeof(CAN_ID_UNION));
     id.CanID_Struct.SourceID = CAN_SOURCE_ID_READ_VERSION;
     id.CanID_Struct.SrcMACID = 0;//CAN_SUB_PB_SRC_ID;
-    id.CanID_Struct.DestMACID = NOAH_CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
     id.CanID_Struct.FUNC_ID = 0x02;
     id.CanID_Struct.ACK = 0;
     id.CanID_Struct.res = 0;
@@ -479,7 +479,7 @@ int Conveyor::GetSysStatus(conveyor_t *sys)     // done
     memset(&id, 0x0, sizeof(CAN_ID_UNION));
     id.CanID_Struct.SourceID = CAN_SOURCE_ID_GET_SYS_STATE;
     id.CanID_Struct.SrcMACID = 0;//CAN_SUB_PB_SRC_ID;
-    id.CanID_Struct.DestMACID = NOAH_CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
     id.CanID_Struct.FUNC_ID = 0x02;
     id.CanID_Struct.ACK = 0;
     id.CanID_Struct.res = 0;
@@ -493,7 +493,7 @@ int Conveyor::GetSysStatus(conveyor_t *sys)     // done
     return error;
 }
 
-int Conveyor::set_conveyor_belt_work_mode(conveyor_t *sys)
+int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
 {
     ROS_INFO("start to set conveyor belt work mode . . . ");
     int error = 0;
@@ -502,7 +502,7 @@ int Conveyor::set_conveyor_belt_work_mode(conveyor_t *sys)
     memset(&id, 0x0, sizeof(CAN_ID_UNION));
     id.CanID_Struct.SourceID = CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE;
     id.CanID_Struct.SrcMACID = 0;
-    id.CanID_Struct.DestMACID = NOAH_CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
     id.CanID_Struct.FUNC_ID = 0x02;
     id.CanID_Struct.ACK = 0;
     id.CanID_Struct.res = 0;
@@ -511,13 +511,13 @@ int Conveyor::set_conveyor_belt_work_mode(conveyor_t *sys)
     can_msg.DataLen = 2;
     can_msg.Data.resize(2);
     can_msg.Data[0] = 0x00;
-    if((sys->conveyor_belt.set_work_mode >= 0) && (sys->conveyor_belt.set_work_mode <= 2))
+    if((mode >= 0) && (mode < CONVEYOR_BELT_STATUS_MAX))
     {
-        can_msg.Data[1] = sys->conveyor_belt.set_work_mode;
+        can_msg.Data[1] = mode;
     }
     else
     {
-        ROS_ERROR("set conveyor belt work mode: parameter error !  set work mode %d", sys->conveyor_belt.set_work_mode);
+        ROS_ERROR("set conveyor belt work mode: parameter error !  set work mode %d", mode);
         return -1;
     }
 
@@ -622,6 +622,43 @@ void Conveyor::from_app_rcv_callback(const std_msgs::String::ConstPtr &msg)
 }
 
 
+void Conveyor::work_mode_test_callback(const std_msgs::UInt8MultiArray &msg)
+{
+    int size = msg.data.size();
+    conveyor_belt_t conveyor_work_mode;
+    if(size == 1)
+    {
+        if(msg.data[0] < CONVEYOR_BELT_STATUS_MAX)
+        {
+            if(msg.data[0] == CONVEYOR_BELT_STATUS_STOP)
+            {
+                conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_STOP;
+                this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
+                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_STOP);
+            }
+            else if(msg.data[0] == CONVEYOR_BELT_STATUS_LOAD)
+            {
+                conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_LOAD;
+                this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
+                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_LOAD);
+            }
+            else if(msg.data[0] == CONVEYOR_BELT_STATUS_UNLOAD)
+            {
+                conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_UNLOAD;
+                this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
+                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_UNLOAD);
+            }
+        }
+        else
+        {
+            ROS_ERROR("%s: parameter error: msg.data[0]: %d", __func__, msg.data[0]);
+        }
+    }
+    else
+    {
+        ROS_ERROR("%s: parameter error: msg.data.size : %d", __func__, size);
+    }
+}
 
 void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg)
 {
@@ -645,7 +682,7 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
     can_msg.ID = msg->ID;
     id.CANx_ID = can_msg.ID;
     can_msg.DataLen = msg->DataLen;
-    if(id.CanID_Struct.SrcMACID != NOAH_CONVEYOR_CAN_SRCMAC_ID)
+    if(id.CanID_Struct.SrcMACID != CONVEYOR_CAN_SRCMAC_ID)
     {
         return ;
     }
@@ -666,32 +703,14 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
                 boost::mutex::scoped_lock(this->mtx);
                 this->get_sys_status_ack_vector.push_back(get_sys_status_ack);
             }while(0);
-
-            //this->PubPower(this->sys_conveyor);
         }
+
         if(id.CanID_Struct.ACK == 0)
         {
             //ROS_INFO("rcv from mcu,source id CAN_SOURCE_ID_GET_SYS_STATE");
             ROS_INFO("sys_status :mcu upload");
             *(uint16_t *)&msg->Data[1];
             this->sys_conveyor->sys_status = *(uint16_t *)&msg->Data[1];
-
-            if((this->sys_conveyor->sys_status & STATE_IS_RECHARGE_IN) || (this->sys_conveyor->sys_status & STATE_IS_CHARGER_IN))
-            {
-                if(this->sys_conveyor->sys_status & STATE_IS_RECHARGE_IN)
-                {
-                    ROS_INFO("recharge plug in");
-                }
-                if(this->sys_conveyor->sys_status & STATE_IS_CHARGER_IN)
-                {
-                    ROS_INFO("charge plug in");
-                }
-            }
-            else
-            {
-                ROS_INFO("charge not plug in");
-                ROS_INFO("recharge not plug in");
-            }
         }
     }
 
