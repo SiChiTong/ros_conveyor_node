@@ -388,25 +388,29 @@ set_conveyor_belt_work_mode_restart:
                     {
                         ROS_INFO("get set conveyor belt work mode:%d",set_conveyor_belt_work_mode_ack.set_work_mode);
                     }
-                    if(set_conveyor_belt_work_mode_ack.err_status == 0)
+                    if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_EXEC_OK)
                     {
-                        ROS_INFO("conveyor belt status ok");
+                        ROS_INFO("conveyor belt exec ok");
                     }
-                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_ERROR)
+                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_TIMEOUT)
                     {
-                        ROS_ERROR("conveyor belt load error !");
+                        ROS_ERROR("conveyor belt load timeout !");
                     }
-                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_UNLOAD_ERROR)
+                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_UNLOAD_TIMEOUT)
                     {
-                        ROS_ERROR("conveyor belt unload error !");
+                        ROS_ERROR("conveyor belt unload timeout !");
                     }
-                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_STATUS_ERROR)
+                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_OCCUPIED)
                     {
-                        ROS_ERROR("conveyor belt status error !");
+                        ROS_ERROR("conveyor belt is occupied !");
+                    }
+                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_ALREADY_EMPTY)
+                    {
+                        ROS_ERROR("conveyor belt is already empty !");
                     }
                     else
                     {
-                        ROS_ERROR("conveyor belt unknow error !");
+                        ROS_ERROR("conveyor belt unknow error, error type: %d !", set_conveyor_belt_work_mode_ack.err_status);
                     }
                     break;
                 }
@@ -775,7 +779,28 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
             {
                 ROS_INFO("MCU upload: CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE");
                 conveyor_belt_ack.set_result = msg->Data[0];
-                ROS_INFO("conveyor belt result :%d", conveyor_belt_ack.set_result);
+                if(conveyor_belt_ack.set_result == CONVEYOR_BELT_LOAD_TIMEOUT)
+                {
+                    ROS_ERROR("load time out ! !");
+                }
+                else if(conveyor_belt_ack.set_result == CONVEYOR_BELT_UNLOAD_TIMEOUT)
+                {
+                    ROS_ERROR("unload time out ! !");
+                }
+                else if(conveyor_belt_ack.set_result == CONVEYOR_LOAD_FINISHED_OK)
+                {
+                    ROS_INFO("load exec finished ok.");
+                }
+                else if(conveyor_belt_ack.set_result == CONVEYOR_UNLOAD_FINISHED_OK)
+                {
+                    ROS_INFO("unload exec finished ok.");
+                }
+                else
+                {
+                    ROS_ERROR("mcu upload state error: msg->Data[0]: %d ! !", msg->Data[0]);
+                }
+
+                //ROS_INFO("conveyor belt result :%d", conveyor_belt_ack.set_result);
             }
             else
             {

@@ -20,16 +20,6 @@ include_directories(
   include/conveyor
 )
 
-## Generate services in the 'srv' folder
-#add_service_files(
-#    FILES
-#    remote_power_ctrl_srv.srv
-#)
-
-#generate_messages(
-#    DEPENDENCIES
-#    std_msgs
-#)
 
 add_executable( conveyor_node
     src/main.cpp
@@ -49,12 +39,6 @@ target_link_libraries(conveyor_node
 #############
 ## Install ##
 #############
-
-
-#############
-## Testing ##
-#############
-
 
 install(TARGETS conveyor_node
         ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

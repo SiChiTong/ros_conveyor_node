@@ -48,6 +48,9 @@ int main(int argc, char **argv)
                 {
                     boost::mutex::scoped_lock(conveyor->mtx);
 
+                    get_version.get_version_type = 1;
+                    conveyor->get_version_vector.push_back(get_version);
+
                     get_version.get_version_type = 2;
                     conveyor->get_version_vector.push_back(get_version);
 

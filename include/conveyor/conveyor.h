@@ -63,14 +63,20 @@ enum
     CONVEYOR_BELT_STATUS_MAX,
 }conveyor_status_e;
 
+
+#define CONVEYOR_BELT_EXEC_OK                   0x01
+#define CONVEYOR_BELT_IS_OCCUPIED               0x81
+#define CONVEYOR_BELT_IS_ALREADY_EMPTY          0x82
 typedef struct
 {
     uint8_t set_work_mode;
     uint8_t set_result;
     uint8_t ack_work_mode;
-#define CONVEYOR_BELT_LOAD_ERROR        0xF0
-#define CONVEYOR_BELT_UNLOAD_ERROR      0xF1
-#define CONVEYOR_BELT_STATUS_ERROR      0xFF
+#define CONVEYOR_BELT_LOAD_TIMEOUT              0xF0
+#define CONVEYOR_BELT_UNLOAD_TIMEOUT            0xF1
+#define CONVEYOR_BELT_STATUS_ERROR              0xFF
+#define CONVEYOR_LOAD_FINISHED_OK               0x01
+#define CONVEYOR_UNLOAD_FINISHED_OK             0x02
     uint8_t err_status;
 }conveyor_belt_t;
 
@@ -157,9 +163,9 @@ class Conveyor
 
         conveyor_t    sys_conveyor_ram;
 
-        std::string software_version_param = "mcu_noah_conveyor_version";
-        std::string hardware_version_param = "noah_conveyor_hardware_version";
-        std::string protocol_version_param = "noah_conveyor_protocol_version";
+        std::string software_version_param = "mcu_conveyor_version";
+        std::string hardware_version_param = "conveyor_hardware_version";
+        std::string protocol_version_param = "conveyor_protocol_version";
 
 };
 
