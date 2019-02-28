@@ -6,9 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mrobot_msgs
   roscan
-  message_generation
 )
-
 
 ###########
 ## Build ##
@@ -20,17 +18,14 @@ include_directories(
   include/conveyor
 )
 
-
 add_executable( conveyor_node
     src/main.cpp
     src/conveyor.cpp
 )
 
 catkin_package(
-    CATKIN_DEPENDS roscpp std_msgs message_runtime
+    CATKIN_DEPENDS roscpp std_msgs
 )
-
-add_dependencies(conveyor_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(conveyor_node
   ${catkin_LIBRARIES}

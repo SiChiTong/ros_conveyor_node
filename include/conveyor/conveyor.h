@@ -28,6 +28,10 @@ using json = nlohmann::json;
 #define PROTOCOL_VERSION_SIZE       14
 
 
+#define CONVEYOR_WORK_MODE_STRING_LOAD          "load"
+#define CONVEYOR_WORK_MODE_STRING_UNLOAD        "unload"
+#define CONVEYOR_WORK_MODE_STRING_STOP          "stop"
+
 typedef struct
 {
     uint8_t reserve;
@@ -56,7 +60,6 @@ typedef struct
 
 enum
 {
-
     CONVEYOR_BELT_STATUS_STOP = 0,
     CONVEYOR_BELT_STATUS_LOAD,
     CONVEYOR_BELT_STATUS_UNLOAD,
@@ -64,7 +67,7 @@ enum
 }conveyor_status_e;
 
 
-#define CONVEYOR_BELT_EXEC_OK                   0x01
+#define CONVEYOR_BELT_EXEC_OK                   0x00
 #define CONVEYOR_BELT_IS_OCCUPIED               0x81
 #define CONVEYOR_BELT_IS_ALREADY_EMPTY          0x82
 typedef struct
@@ -102,13 +105,13 @@ class Conveyor
         Conveyor(bool log_on = false)
         {
             is_log_on = log_on;
-            noah_conveyor_pub = n.advertise<std_msgs::String>("tx_noah_conveyor_node",1000);
-            noah_conveyor_sub = n.subscribe("rx_noah_conveyor_node",1000,&Conveyor::from_app_rcv_callback,this);
 
             pub_to_can_node = n.advertise<mrobot_msgs::vci_can>("conveyor_to_can", 1000);
 
             sub_from_can_node = n.subscribe("can_to_conveyor", 1000, &Conveyor::rcv_from_can_node_callback, this);
             sub_conveyor_work_mode_test = n.subscribe("/conveyor_work_mode_test", 1000, &Conveyor::work_mode_test_callback, this);
+            sub_conveyor_work_mode = n.subscribe("/conveyor_ctrl", 1000, &Conveyor::work_mode_callback, this);
+            pub_conveyor_work_mode_ack = n.advertise<std_msgs::String>("conveyor_ctrl_ack", 1000);
 
 
             sys_conveyor = &sys_conveyor_ram;
@@ -120,25 +123,18 @@ class Conveyor
         int conveyorParamInit(void);
         int GetVersion(conveyor_t *sys);
         int GetSysStatus(conveyor_t *sys);
-        int get_serials_leds_version(conveyor_t *sys);
         int set_conveyor_belt_work_mode(uint8_t mode);
-
-        int handle_receive_data(conveyor_t *sys);
-        void from_app_rcv_callback(const std_msgs::String::ConstPtr &msg);
-        void from_navigation_rcv_callback(const std_msgs::String::ConstPtr &msg);
-        void power_from_app_rcv_callback(std_msgs::UInt8MultiArray data);
-        void PubChargeStatus(uint8_t status);
 
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
         void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
+        void work_mode_callback(const std_msgs::String::ConstPtr &msg);
+        void ack_work_mode_start_result(const std::string &msg, int err_code);
+        void ack_work_mode_exec_result(const std::string &msg, int err_code);
+        void pub_json_msg(const nlohmann::json j_msg);
 
         json j;
-        void pub_json_msg_to_app(const nlohmann::json j_msg);
         conveyor_t    *sys_conveyor;
         can_long_frame  long_frame;
-
-        void update_sys_status(void);
-
 
         vector<get_sys_status_t>        get_sys_status_vector;
         vector<get_sys_status_ack_t>    get_sys_status_ack_vector;
@@ -155,11 +151,11 @@ class Conveyor
     private:
 
         ros::NodeHandle n;
-        ros::Publisher noah_conveyor_pub;
-        ros::Subscriber noah_conveyor_sub;
         ros::Publisher pub_to_can_node;//publish to roscan node
         ros::Subscriber sub_from_can_node;
         ros::Subscriber sub_conveyor_work_mode_test;
+        ros::Subscriber sub_conveyor_work_mode;
+        ros::Publisher pub_conveyor_work_mode_ack;
 
         conveyor_t    sys_conveyor_ram;
 
@@ -172,6 +168,3 @@ class Conveyor
 void *CanProtocolProcess(void* arg);
 
 #endif
-
-
-

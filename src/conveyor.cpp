@@ -5,31 +5,13 @@
  */
 
 #include "ros/ros.h"
-#include "std_msgs/String.h"
 #include "std_msgs/UInt8MultiArray.h"
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include <string.h>
 #include <time.h>
-#include <signal.h>
-#include <iostream>
-#include <vector>
-#include <conveyor.h>
 #include <boost/thread/thread.hpp>
-#include <boost/thread/mutex.hpp>
-#include <mrobot_msgs/vci_can.h>
-#include <roscan/can_long_frame.h>
-
-#define conveyorInfo     ROS_INFO
+#include <conveyor.h>
 
 
-
-//class Conveyor;
 #define GET_SYS_STSTUS_TIME_OUT                 500//ms
 #define GET_VERSION_TIME_OUT                    500//ms
 #define SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT    500//ms
@@ -50,7 +32,6 @@ void *CanProtocolProcess(void* arg)
     while(ros::ok())
     {
 
-
         /* -------- get sys status protocol begin -------- */
         do
         {
@@ -65,7 +46,6 @@ void *CanProtocolProcess(void* arg)
                 }
 
                 pConveyor->get_sys_status_vector.erase(a);
-
             }
 
         }while(0);
@@ -362,12 +342,20 @@ set_conveyor_belt_work_mode_restart:
 
                         pConveyor->set_conveyor_belt_work_mode_ack_vector.erase(b);
 
-                        if(set_conveyor_belt_work_mode_ack.set_work_mode == set_conveyor_belt_mode.set_work_mode)
+                        if(set_conveyor_belt_work_mode_ack.set_work_mode == set_conveyor_belt_mode.set_work_mode) 
                         {
-                            set_conveyor_belt_work_mode_ack_flag = 1;
-                            if(pConveyor->is_log_on == true)
+
+                            if ((set_conveyor_belt_work_mode_ack.set_work_mode >= CONVEYOR_BELT_STATUS_STOP) && (set_conveyor_belt_work_mode_ack.set_work_mode < CONVEYOR_BELT_STATUS_MAX))
                             {
-                                ROS_INFO("get right set conveyor belt work mode ack");
+                                set_conveyor_belt_work_mode_ack_flag = 1;
+                                if (pConveyor->is_log_on == true)
+                                {
+                                    ROS_INFO("get right set conveyor belt work mode ack");
+                                }
+                            }
+                            else
+                            {
+                                ROS_ERROR("error: get ack set conveyor belt work mode is %d", set_conveyor_belt_work_mode_ack.set_work_mode);
                             }
                         }
                         else
@@ -378,35 +366,54 @@ set_conveyor_belt_work_mode_restart:
                 }while(0);
                 if(set_conveyor_belt_work_mode_ack_flag == 1)
                 {
+                    std::string mode;
                     set_conveyor_belt_work_mode_ack_flag = 0;
                     if(pConveyor->is_log_on == true)
                     {
-                        //ROS_INFO("get right set led effect ack");
                     }
                     pConveyor->sys_conveyor->conveyor_belt = set_conveyor_belt_work_mode_ack;
                     if(pConveyor->is_log_on == true)
                     {
                         ROS_INFO("get set conveyor belt work mode:%d",set_conveyor_belt_work_mode_ack.set_work_mode);
                     }
+                    if(set_conveyor_belt_work_mode_ack.set_work_mode == CONVEYOR_BELT_STATUS_STOP)
+                    {
+                        mode = CONVEYOR_WORK_MODE_STRING_STOP;
+                    }
+                    else if(set_conveyor_belt_work_mode_ack.set_work_mode == CONVEYOR_BELT_STATUS_LOAD)
+                    {
+                        mode = CONVEYOR_WORK_MODE_STRING_LOAD;
+                    }
+                    else if(set_conveyor_belt_work_mode_ack.set_work_mode == CONVEYOR_BELT_STATUS_UNLOAD)
+                    {
+                        mode = CONVEYOR_WORK_MODE_STRING_UNLOAD;
+                    }
+
+
                     if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_EXEC_OK)
                     {
                         ROS_INFO("conveyor belt exec ok");
+                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_EXEC_OK);
                     }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_TIMEOUT)
                     {
                         ROS_ERROR("conveyor belt load timeout !");
+                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_LOAD_TIMEOUT);
                     }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_UNLOAD_TIMEOUT)
                     {
                         ROS_ERROR("conveyor belt unload timeout !");
+                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
                     }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_OCCUPIED)
                     {
                         ROS_ERROR("conveyor belt is occupied !");
+                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_IS_OCCUPIED);
                     }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_ALREADY_EMPTY)
                     {
                         ROS_ERROR("conveyor belt is already empty !");
+                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_IS_ALREADY_EMPTY);
                     }
                     else
                     {
@@ -453,14 +460,14 @@ int Conveyor::conveyorParamInit(void)
 
 
 
-int Conveyor::GetVersion(conveyor_t *sys)      // done
+int Conveyor::GetVersion(conveyor_t *sys)
 {
     int error = 0;
     mrobot_msgs::vci_can can_msg;
     CAN_ID_UNION id;
     memset(&id, 0x0, sizeof(CAN_ID_UNION));
     id.CanID_Struct.SourceID = CAN_SOURCE_ID_READ_VERSION;
-    id.CanID_Struct.SrcMACID = 0;//CAN_SUB_PB_SRC_ID;
+    id.CanID_Struct.SrcMACID = 0;
     id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
     id.CanID_Struct.FUNC_ID = 0x02;
     id.CanID_Struct.ACK = 0;
@@ -475,14 +482,14 @@ int Conveyor::GetVersion(conveyor_t *sys)      // done
     return error;
 }
 
-int Conveyor::GetSysStatus(conveyor_t *sys)     // done
+int Conveyor::GetSysStatus(conveyor_t *sys)
 {
     int error = 0;
     mrobot_msgs::vci_can can_msg;
     CAN_ID_UNION id;
     memset(&id, 0x0, sizeof(CAN_ID_UNION));
     id.CanID_Struct.SourceID = CAN_SOURCE_ID_GET_SYS_STATE;
-    id.CanID_Struct.SrcMACID = 0;//CAN_SUB_PB_SRC_ID;
+    id.CanID_Struct.SrcMACID = 0;
     id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
     id.CanID_Struct.FUNC_ID = 0x02;
     id.CanID_Struct.ACK = 0;
@@ -529,102 +536,93 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
     return error;
 }
 
-void Conveyor::pub_json_msg_to_app( const nlohmann::json j_msg)
+void Conveyor::pub_json_msg( const nlohmann::json j_msg)
 {
-    std_msgs::String pub_json_msg;
+    std_msgs::String json_msg;
     std::stringstream ss;
 
     ss.clear();
     ss << j_msg;
-    pub_json_msg.data = ss.str();
-    this->noah_conveyor_pub.publish(pub_json_msg);
+    json_msg.data = ss.str();
+    this->pub_conveyor_work_mode_ack.publish(json_msg);
 }
 
-void Conveyor::from_app_rcv_callback(const std_msgs::String::ConstPtr &msg)
+void Conveyor::ack_work_mode_start_result(const std::string &mode, int err_code)
 {
-    //ROS_INFO("Rcv test data");
+    json j;
+    j.clear();
+    j =
+        {
+            {"sub_name", "conveyor_ctrl_start_ack"},
+                {"data",
+                    {
+                        {"set_mode", mode.c_str()},
+                        {"error_code", err_code},
+                }
+            }
+        };
+    this->pub_json_msg(j);
+}
+
+void Conveyor::ack_work_mode_exec_result(const std::string &msg, int err_code)
+{
+
+    json j;
+    j.clear();
+    j =
+        {
+            {"sub_name", "conveyor_ctrl_exec_ack"},
+                {"data",
+                    {
+                        {"error_code", err_code},
+                }
+            }
+        };
+    this->pub_json_msg(j);
+}
+
+void Conveyor::work_mode_callback(const std_msgs::String::ConstPtr &msg)
+{
+    conveyor_belt_t conveyor_work_mode = {0};
     auto j = json::parse(msg->data.c_str());
     std::string j_str = j.dump();
     ROS_WARN("%s",j_str.data());
 
     if(j.find("pub_name") != j.end())
     {
-
-        //ROS_INFO("find pub_name");
-        if(j["pub_name"] == "set_module_state")
+        if(j["pub_name"] == "conveyor_ctrl")
         {
-            boost::mutex::scoped_lock(mtx);
-            if(j["data"]["dev_name"] == "_24v_printer")
+            if(j.find("data") != j.end())
             {
-                if(j["data"]["set_state"] == true)
+                if (j["data"].find("set_mode") != j["data"].end())
                 {
-                }
-                else if(j["data"]["set_state"] == false)
-                {
-                    ROS_INFO("set 24v printer off");
-                }
-            }
-
-            if(j["data"]["dev_name"] == "door_ctrl_state")
-            {
-                if(j["data"].find("door_id") != j["data"].end())
-                {
-                    ROS_INFO("start to check door id ...");
-                    if(j["data"]["door_id"].empty())
+                    if (j["data"]["set_mode"] == CONVEYOR_WORK_MODE_STRING_LOAD)
                     {
-                        ROS_WARN("door id value is NULL !");//
-                        if(j["data"]["set_state"] == true)
-                        {
-                            ROS_INFO("set door ctrl  on");
-                        }
-                        else if(j["data"]["set_state"] == false)
-                        {
-                            ROS_INFO("set door ctrl off");
-                        }
+                        ROS_WARN("%s:get load ctrl", __func__);
+                        conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_LOAD;
+                        this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
+                    }
+                    else if (j["data"]["set_mode"] == CONVEYOR_WORK_MODE_STRING_UNLOAD)
+                    {
+                        ROS_WARN("%s:get unload ctrl", __func__);
+                        conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_UNLOAD;
+                        this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
+                    }
+                    else if (j["data"]["set_mode"] == CONVEYOR_WORK_MODE_STRING_STOP)
+                    {
+                        ROS_WARN("%s:get stop ctrl", __func__);
+                        conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_STOP;
+                        this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
                     }
                     else
                     {
-                        ROS_INFO("door id is not NULL");
-                        uint8_t door_id = j["data"]["door_id"];
-                        //bool on_off = j["data"]["set_state"];
-                        bool on_off;
-                        if(j["data"].find("set_state") != j["data"].end())
-                        {
-                            on_off = j["data"]["set_state"];
-                        }
-                        else
-                        {
-                            return;
-                        }
-                        ROS_WARN("get door id");//
-
-                        if(on_off == true)
-                        {
-                        }
-                        else
-                        {
-                        }
-                        switch(door_id)
-                        {
-                            case 1:
-                                break;
-                            case 2:
-                                break;
-                            case 3:
-                                break;
-                            case 4:
-                                break;
-                            default :
-                                ROS_ERROR("door ctrl id  error !");
-                                break;
-                        }
+                        ROS_ERROR("%s:set mode parse error!", __func__);
                     }
                 }
             }
         }
     }
 }
-
 
 void Conveyor::work_mode_test_callback(const std_msgs::UInt8MultiArray &msg)
 {
@@ -638,19 +636,16 @@ void Conveyor::work_mode_test_callback(const std_msgs::UInt8MultiArray &msg)
             {
                 conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_STOP;
                 this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
-                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_STOP);
             }
             else if(msg.data[0] == CONVEYOR_BELT_STATUS_LOAD)
             {
                 conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_LOAD;
                 this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
-                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_LOAD);
             }
             else if(msg.data[0] == CONVEYOR_BELT_STATUS_UNLOAD)
             {
                 conveyor_work_mode.set_work_mode = CONVEYOR_BELT_STATUS_UNLOAD;
                 this->set_conveyor_belt_work_mode_vector.push_back(conveyor_work_mode);
-                //this->set_conveyor_belt_work_mode(CONVEYOR_BELT_STATUS_UNLOAD);
             }
         }
         else
@@ -752,7 +747,6 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
         {
             sys_conveyor->hw_version.resize(len);
             sys_conveyor->hw_version.clear();
-            //ROS_ERROR("hardware version length: %d",len);
             for(uint8_t i = 0; i < len; i++)
             {
                 sys_conveyor->hw_version.push_back(*(char *)&(msg->Data[i+2]));
@@ -777,30 +771,33 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
         {
             if(msg->DataLen == 1)
             {
+                std::string mode;
                 ROS_INFO("MCU upload: CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE");
                 conveyor_belt_ack.set_result = msg->Data[0];
                 if(conveyor_belt_ack.set_result == CONVEYOR_BELT_LOAD_TIMEOUT)
                 {
                     ROS_ERROR("load time out ! !");
+                    this->ack_work_mode_exec_result(mode, CONVEYOR_BELT_LOAD_TIMEOUT);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_BELT_UNLOAD_TIMEOUT)
                 {
                     ROS_ERROR("unload time out ! !");
+                    this->ack_work_mode_exec_result(mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_LOAD_FINISHED_OK)
                 {
                     ROS_INFO("load exec finished ok.");
+                    this->ack_work_mode_exec_result(mode, CONVEYOR_LOAD_FINISHED_OK);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_UNLOAD_FINISHED_OK)
                 {
                     ROS_INFO("unload exec finished ok.");
+                    this->ack_work_mode_exec_result(mode, CONVEYOR_UNLOAD_FINISHED_OK);
                 }
                 else
                 {
                     ROS_ERROR("mcu upload state error: msg->Data[0]: %d ! !", msg->Data[0]);
                 }
-
-                //ROS_INFO("conveyor belt result :%d", conveyor_belt_ack.set_result);
             }
             else
             {
@@ -823,10 +820,3 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
         }
     }
 }
-
-
-void Conveyor::update_sys_status(void)
-{
-    uint16_t sys_status = this->sys_conveyor->sys_status;
-}
-
