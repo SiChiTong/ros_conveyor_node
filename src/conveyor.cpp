@@ -342,7 +342,7 @@ set_conveyor_belt_work_mode_restart:
 
                         pConveyor->set_conveyor_belt_work_mode_ack_vector.erase(b);
 
-                        if(set_conveyor_belt_work_mode_ack.set_work_mode == set_conveyor_belt_mode.set_work_mode) 
+                        if(set_conveyor_belt_work_mode_ack.set_work_mode == set_conveyor_belt_mode.set_work_mode)
                         {
 
                             if ((set_conveyor_belt_work_mode_ack.set_work_mode >= CONVEYOR_BELT_STATUS_STOP) && (set_conveyor_belt_work_mode_ack.set_work_mode < CONVEYOR_BELT_STATUS_MAX))
@@ -395,16 +395,16 @@ set_conveyor_belt_work_mode_restart:
                         ROS_INFO("conveyor belt exec ok");
                         pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_EXEC_OK);
                     }
-                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_TIMEOUT)
-                    {
-                        ROS_ERROR("conveyor belt load timeout !");
-                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_LOAD_TIMEOUT);
-                    }
-                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_UNLOAD_TIMEOUT)
-                    {
-                        ROS_ERROR("conveyor belt unload timeout !");
-                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
-                    }
+//                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_TIMEOUT)
+//                    {
+//                        ROS_ERROR("conveyor belt load timeout !");
+//                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_LOAD_TIMEOUT);
+//                    }
+//                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_UNLOAD_TIMEOUT)
+//                    {
+//                        ROS_ERROR("conveyor belt unload timeout !");
+//                        pConveyor->ack_work_mode_exec_result(mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
+//                    }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_OCCUPIED)
                     {
                         ROS_ERROR("conveyor belt is occupied !");

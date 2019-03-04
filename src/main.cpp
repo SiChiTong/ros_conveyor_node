@@ -52,7 +52,7 @@ int main(int argc, char **argv)
                     get_version.get_version_type = 3;
                     conveyor->get_version_vector.push_back(get_version);
 
-                    conveyor->set_conveyor_belt_work_mode_vector.push_back(set_conveyor_belt_work_mode);
+                    //conveyor->set_conveyor_belt_work_mode_vector.push_back(set_conveyor_belt_work_mode);
 
                 }while(0);
             }
