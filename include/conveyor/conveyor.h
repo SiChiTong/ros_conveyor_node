@@ -22,6 +22,8 @@ using json = nlohmann::json;
 
 #define CAN_SOURCE_ID_GET_SYS_STATE                 0x83
 #define CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE   0xa0
+#define CAN_SOURCE_ID_GET_PHO_ELEC_SWITCH_STATE     0xa1
+#define CAN_SOURCE_ID_LOCK_CTRL                     0xa2
 
 #define HW_VERSION_SIZE             3
 #define SW_VERSION_SIZE             16
@@ -83,6 +85,14 @@ typedef struct
     uint8_t err_status;
 }conveyor_belt_t;
 
+
+#define LOCK_STATUS_LOCK                        0x01
+#define LOCK_STATUS_UNLOCK                      0x00
+typedef struct
+{
+    uint8_t status;
+}lock_ctrl_t;
+
 typedef struct
 {
 #define VERSION_TYPE_FW             0
@@ -95,6 +105,8 @@ typedef struct
 
     uint16_t                     sys_status;
     conveyor_belt_t             conveyor_belt;
+    lock_ctrl_t                 lock_ctrl;
+    lock_ctrl_t                 lock_status_ack;
 }conveyor_t;
 
 extern conveyor_t    *sys_conveyor;
@@ -124,6 +136,7 @@ class Conveyor
         int GetVersion(conveyor_t *sys);
         int GetSysStatus(conveyor_t *sys);
         int set_conveyor_belt_work_mode(uint8_t mode);
+        int set_lock_status(uint8_t status);
 
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
         void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
@@ -144,6 +157,9 @@ class Conveyor
 
         vector<conveyor_belt_t>         set_conveyor_belt_work_mode_vector;
         vector<conveyor_belt_t>         set_conveyor_belt_work_mode_ack_vector;
+
+        vector<lock_ctrl_t>             lock_ctrl_vector;
+        vector<lock_ctrl_t>             lock_ctrl_ack_vector;
 
         boost::mutex mtx;
         bool is_log_on;

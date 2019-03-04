@@ -15,20 +15,24 @@
 #define GET_SYS_STSTUS_TIME_OUT                 500//ms
 #define GET_VERSION_TIME_OUT                    500//ms
 #define SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT    500//ms
+#define LOCK_CTRL_TIME_OUT                      500//ms
 
 #define GET_VERSION_RETRY_CNT                   5
 #define SET_CONVEYOR_BELT_WORK_MODE_RETRY_CNT   5
+#define LOCK_CTRL_RETRY_CNT                     5
 void *CanProtocolProcess(void* arg)
 {
     get_sys_status_t get_sys_status;
     get_version_t get_version;
     conveyor_belt_t set_conveyor_belt_mode;
+    lock_ctrl_t lock_ctrl;
 
     Conveyor *pConveyor =  (Conveyor*)arg;
 
     bool get_sys_status_flag = 0;
     bool get_version_flag = 0;
     bool set_conveyor_belt_flag = 0;
+    bool lock_ctrl_flag = 0;
     while(ros::ok())
     {
 
@@ -448,6 +452,122 @@ set_conveyor_belt_work_mode_restart:
         /* -------- set conveyor belt work mode protocol end -------- */
 
 
+
+
+
+        /* --------  set lock status protocol begin -------- */
+        do
+        {
+            boost::mutex::scoped_lock(mtx);
+            if(!pConveyor->lock_ctrl_vector.empty())
+            {
+                auto a = pConveyor->lock_ctrl_vector.begin();
+                lock_ctrl = *a;
+                lock_ctrl_flag = 1;
+
+                pConveyor->lock_ctrl_vector.erase(a);
+
+            }
+
+        }while(0);
+
+        if(lock_ctrl_flag == 1)
+        {
+            uint8_t flag = 0;
+            uint32_t time_out_cnt = 0;
+            static uint8_t err_cnt = 0;
+
+            lock_ctrl_flag = 0;
+
+            if(pConveyor->is_log_on == true)
+            {
+                ROS_INFO("lock_ctrl.status = %d", lock_ctrl.status);
+                ROS_INFO("get lock ctrl cmd");
+            }
+            do
+            {
+                boost::mutex::scoped_lock(mtx);
+                pConveyor->lock_ctrl_ack_vector.clear();
+            }while(0);
+
+lock_ctrl_restart:
+            if(pConveyor->is_log_on == true)
+            {
+                ROS_INFO("lock ctrl :send cmd to mcu");
+            }
+            pConveyor->sys_conveyor->lock_ctrl = lock_ctrl;
+
+            pConveyor->set_lock_status(pConveyor->sys_conveyor->lock_ctrl.status);
+            bool lock_ctrl_ack_flag = 0;
+            lock_ctrl_t lock_ctrl_ack;
+            while(time_out_cnt < LOCK_CTRL_TIME_OUT / 10)
+            {
+                time_out_cnt++;
+                do
+                {
+                    boost::mutex::scoped_lock(mtx);
+                    if(!pConveyor->lock_ctrl_ack_vector.empty())
+                    {
+                        if(pConveyor->is_log_on == true)
+                        {
+                            ROS_INFO("lock_ctrl_ack_vector is not empty");
+                        }
+                        auto b = pConveyor->lock_ctrl_ack_vector.begin();
+
+                        lock_ctrl_ack = *b;
+
+                        pConveyor->lock_ctrl_ack_vector.erase(b);
+
+                        if(lock_ctrl_ack.status == lock_ctrl.status)
+                        {
+
+                            lock_ctrl_ack_flag = 1;
+                            if (pConveyor->is_log_on == true)
+                            {
+                                ROS_INFO("get right lock ctrl ack");
+                            }
+                        }
+                        else
+                        {
+                            ROS_ERROR("error: get ack lock ctrl status is %d", lock_ctrl_ack.status);
+                        }
+                    }
+                }while(0);
+                if(lock_ctrl_ack_flag == 1)
+                {
+                    lock_ctrl_ack_flag = 0;
+                    pConveyor->sys_conveyor->lock_status_ack = lock_ctrl_ack;
+                    ROS_INFO("lock ctrl exec ok");
+                    break;
+                }
+                else
+                {
+                    usleep(10*1000);
+                }
+            }
+            if(time_out_cnt < LOCK_CTRL_TIME_OUT / 10)
+            {
+                err_cnt = 0;
+                time_out_cnt = 0;
+            }
+            else
+            {
+                ROS_ERROR("lock ctrl time out");
+                time_out_cnt = 0;
+                if(err_cnt++ < LOCK_CTRL_RETRY_CNT)
+                {
+                    ROS_ERROR("lock ctrl start to resend msg....");
+                    goto lock_ctrl_restart;
+                }
+                ROS_ERROR("CAN NOT COMMUNICATE with conveyor mcu, lock ctrl failed !");
+                err_cnt = 0;
+            }
+
+        }
+        /* -------- set lock status protocol end -------- */
+
+
+
         usleep(10 * 1000);
     }
 }
@@ -535,6 +655,41 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
     this->pub_to_can_node.publish(can_msg);
     return error;
 }
+
+
+int Conveyor::set_lock_status(uint8_t status)
+{
+    ROS_INFO("start to set lock status . . . ");
+    int error = 0;
+    mrobot_msgs::vci_can can_msg;
+    CAN_ID_UNION id;
+    memset(&id, 0x0, sizeof(CAN_ID_UNION));
+    id.CanID_Struct.SourceID = CAN_SOURCE_ID_LOCK_CTRL;
+    id.CanID_Struct.SrcMACID = 0;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.FUNC_ID = 0x02;
+    id.CanID_Struct.ACK = 0;
+    id.CanID_Struct.res = 0;
+
+    can_msg.ID = id.CANx_ID;
+    can_msg.DataLen = 2;
+    can_msg.Data.resize(2);
+    can_msg.Data[0] = 0x00;
+    if((status == LOCK_STATUS_LOCK) || (status == LOCK_STATUS_UNLOCK))
+    {
+        can_msg.Data[1] = status;
+        ROS_INFO("set lock ctrl: %d", status);
+    }
+    else
+    {
+        ROS_ERROR("set lock ctrl: parameter error !  set lock status %d", status);
+        return -1;
+    }
+
+    this->pub_to_can_node.publish(can_msg);
+    return error;
+}
+
 
 void Conveyor::pub_json_msg( const nlohmann::json j_msg)
 {
@@ -817,6 +972,25 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
 
             this->sys_conveyor->conveyor_belt.ack_work_mode = conveyor_belt_ack.ack_work_mode;
             this->sys_conveyor->conveyor_belt.err_status = conveyor_belt_ack.err_status;
+        }
+    }
+
+
+
+    if(id.CanID_Struct.SourceID == CAN_SOURCE_ID_LOCK_CTRL)
+    {
+        ROS_INFO("rcv from mcu,source id CAN_SOURCE_ID_LOCK_CTRL");
+        lock_ctrl_t lock_ctrl;
+        if(id.CanID_Struct.ACK == 1)
+        {
+            lock_ctrl.status = msg->Data[0];
+            do
+            {
+                boost::mutex::scoped_lock(this->mtx);
+                this->lock_ctrl_ack_vector.push_back(lock_ctrl);
+            } while (0);
+
+            this->sys_conveyor->lock_status_ack = lock_ctrl;
         }
     }
 }
