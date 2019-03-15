@@ -325,7 +325,7 @@ set_conveyor_belt_work_mode_restart:
             }
             pConveyor->sys_conveyor->conveyor_belt = set_conveyor_belt_mode;
 
-            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor->conveyor_belt.set_work_mode);
+            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor->conveyor_belt.set_work_mode, pConveyor->sys_conveyor->conveyor_belt.need_lock);
             bool set_conveyor_belt_work_mode_ack_flag = 0;
             conveyor_belt_t set_conveyor_belt_work_mode_ack;
             while(time_out_cnt < SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT / 10)
@@ -455,7 +455,7 @@ set_conveyor_belt_work_mode_restart:
 
 
 
-        /* --------  set lock status protocol begin -------- */
+        /* --------  lock ctrl protocol begin -------- */
         do
         {
             boost::mutex::scoped_lock(mtx);
@@ -564,7 +564,7 @@ lock_ctrl_restart:
             }
 
         }
-        /* -------- set lock status protocol end -------- */
+        /* -------- lock ctrl protocol end -------- */
 
 
 
@@ -624,7 +624,7 @@ int Conveyor::GetSysStatus(conveyor_t *sys)
     return error;
 }
 
-int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
+int Conveyor::set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock)
 {
     ROS_INFO("start to set conveyor belt work mode . . . ");
     int error = 0;
@@ -639,8 +639,8 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
     id.CanID_Struct.res = 0;
 
     can_msg.ID = id.CANx_ID;
-    can_msg.DataLen = 2;
-    can_msg.Data.resize(2);
+    can_msg.DataLen = 3;
+    can_msg.Data.resize(3);
     can_msg.Data[0] = 0x00;
     if((mode >= 0) && (mode < CONVEYOR_BELT_STATUS_MAX))
     {
@@ -651,7 +651,17 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode)
         ROS_ERROR("set conveyor belt work mode: parameter error !  set work mode %d", mode);
         return -1;
     }
+    if(need_lock < 2)
+    {
+        can_msg.Data[2] = need_lock;
+    }
+    else
+    {
+        ROS_ERROR("param need lock error: %d", need_lock);
+        return -1;
+    }
 
+    ROS_INFO("set conveyor belt work mode %d, need lock: %d", mode, need_lock);
     this->pub_to_can_node.publish(can_msg);
     return error;
 }
@@ -751,6 +761,25 @@ void Conveyor::work_mode_callback(const std_msgs::String::ConstPtr &msg)
             {
                 if (j["data"].find("set_mode") != j["data"].end())
                 {
+                    if (j["data"].find("lock") != j["data"].end())
+                    {
+                        ROS_INFO("get lock");
+                        if (j["data"]["lock"] == true)
+                        {
+                            ROS_INFO("get is need lock : true");
+                            conveyor_work_mode.need_lock = 1;
+                        }
+                        else if (j["data"]["lock"] == false)
+                        {
+                            ROS_INFO("get is need lock : false");
+                            conveyor_work_mode.need_lock = 0;
+                        }
+                        else
+                        {
+                            ROS_ERROR("is need lock parameter error !");
+                        }
+                    }
+
                     if (j["data"]["set_mode"] == CONVEYOR_WORK_MODE_STRING_LOAD)
                     {
                         ROS_WARN("%s:get load ctrl", __func__);

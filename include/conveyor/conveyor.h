@@ -75,6 +75,7 @@ enum
 typedef struct
 {
     uint8_t set_work_mode;
+    uint8_t need_lock;
     uint8_t set_result;
     uint8_t ack_work_mode;
 #define CONVEYOR_BELT_LOAD_TIMEOUT              0xF0
@@ -135,7 +136,7 @@ class Conveyor
         int conveyorParamInit(void);
         int GetVersion(conveyor_t *sys);
         int GetSysStatus(conveyor_t *sys);
-        int set_conveyor_belt_work_mode(uint8_t mode);
+        int set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock);
         int set_lock_status(uint8_t status);
 
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
