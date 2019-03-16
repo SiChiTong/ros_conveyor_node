@@ -124,7 +124,9 @@ class Conveyor
             sub_from_can_node = n.subscribe("can_to_conveyor", 1000, &Conveyor::rcv_from_can_node_callback, this);
             sub_conveyor_work_mode_test = n.subscribe("/conveyor_work_mode_test", 1000, &Conveyor::work_mode_test_callback, this);
             sub_conveyor_work_mode = n.subscribe("/conveyor_ctrl", 1000, &Conveyor::work_mode_callback, this);
+            sub_conveyor_lock_ctrl = n.subscribe("/conveyor_lock_ctrl", 1000, &Conveyor::lock_ctrl_callback, this);
             pub_conveyor_work_mode_ack = n.advertise<std_msgs::String>("conveyor_ctrl_ack", 1000);
+            pub_conveyor_lock_ctrl_ack = n.advertise<std_msgs::String>("conveyor_lock_ctrl_ack", 1000);
 
 
             sys_conveyor = &sys_conveyor_ram;
@@ -142,8 +144,10 @@ class Conveyor
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
         void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
         void work_mode_callback(const std_msgs::String::ConstPtr &msg);
+        void lock_ctrl_callback(const std_msgs::String::ConstPtr &msg);
         void ack_work_mode_start_result(const std::string &msg, int err_code);
         void ack_work_mode_exec_result(const std::string &msg, int err_code);
+        void ack_lock_ctrl(const std::string &msg, int err_code);
         void pub_json_msg(const nlohmann::json j_msg);
 
         json j;
@@ -172,7 +176,9 @@ class Conveyor
         ros::Subscriber sub_from_can_node;
         ros::Subscriber sub_conveyor_work_mode_test;
         ros::Subscriber sub_conveyor_work_mode;
+        ros::Subscriber sub_conveyor_lock_ctrl;
         ros::Publisher pub_conveyor_work_mode_ack;
+        ros::Publisher pub_conveyor_lock_ctrl_ack;
 
         conveyor_t    sys_conveyor_ram;
 

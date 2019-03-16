@@ -537,6 +537,18 @@ lock_ctrl_restart:
                 {
                     lock_ctrl_ack_flag = 0;
                     pConveyor->sys_conveyor->lock_status_ack = lock_ctrl_ack;
+                    if(pConveyor->sys_conveyor->lock_status_ack.status == LOCK_STATUS_LOCK)
+                    {
+                        pConveyor->ack_lock_ctrl("lock", 1);
+                    }
+                    else if(pConveyor->sys_conveyor->lock_status_ack.status == LOCK_STATUS_UNLOCK)
+                    {
+                        pConveyor->ack_lock_ctrl("unlock", 1);
+                    }
+                    else
+                    {
+                        pConveyor->ack_lock_ctrl("lock", 0);
+                    }
                     ROS_INFO("lock ctrl exec ok");
                     break;
                 }
@@ -560,6 +572,18 @@ lock_ctrl_restart:
                     goto lock_ctrl_restart;
                 }
                 ROS_ERROR("CAN NOT COMMUNICATE with conveyor mcu, lock ctrl failed !");
+                if(pConveyor->sys_conveyor->lock_ctrl.status == LOCK_STATUS_LOCK)
+                {
+                    pConveyor->ack_lock_ctrl("lock", 0x10);
+                }
+                else if(pConveyor->sys_conveyor->lock_ctrl.status == LOCK_STATUS_UNLOCK)
+                {
+                    pConveyor->ack_lock_ctrl("unlock", 0x11);
+                }
+                else
+                {
+                    pConveyor->ack_lock_ctrl("lock", 0x20);
+                }
                 err_cnt = 0;
             }
 
@@ -808,6 +832,73 @@ void Conveyor::work_mode_callback(const std_msgs::String::ConstPtr &msg)
     }
 }
 
+
+
+
+void Conveyor::ack_lock_ctrl(const std::string &msg, int err_code)
+{
+
+    json j;
+    j.clear();
+    j =
+        {
+            {"sub_name", "conveyor_lock_ctrl_ack"},
+                {"data",
+                    {
+                        {"lock_ctrl", msg.c_str()},
+                        {"error_code", err_code},
+                }
+            }
+        };
+
+    std_msgs::String json_msg;
+    std::stringstream ss;
+
+    ss.clear();
+    ss << j;
+    json_msg.data = ss.str();
+    this->pub_conveyor_lock_ctrl_ack.publish(json_msg);
+}
+
+
+void Conveyor::lock_ctrl_callback(const std_msgs::String::ConstPtr &msg)
+{
+    lock_ctrl_t lock_ctrl = {0};
+    auto j = json::parse(msg->data.c_str());
+    std::string j_str = j.dump();
+    ROS_WARN("%s: %s", __func__, j_str.data());
+
+    if(j.find("pub_name") != j.end())
+    {
+        if(j["pub_name"] == "conveyor_lock_ctrl")
+        {
+            if(j.find("data") != j.end())
+            {
+                if (j["data"].find("lock_ctrl") != j["data"].end())
+                {
+                    if (j["data"]["lock_ctrl"] == "lock")
+                    {
+                        ROS_WARN("%s:get conveyor lock ctrl: lock", __func__);
+                        lock_ctrl.status = LOCK_STATUS_LOCK;
+                        this->lock_ctrl_vector.push_back(lock_ctrl);
+                    }
+                    else if (j["data"]["lock_ctrl"] == "unlock")
+                    {
+                        ROS_WARN("%s:get lock ctrl : unlock", __func__);
+                        lock_ctrl.status = LOCK_STATUS_UNLOCK;
+                        this->lock_ctrl_vector.push_back(lock_ctrl);
+                    }
+                    else
+                    {
+                        ROS_ERROR("%s: conveyor lock ctrl parameter error ! !", __func__);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 void Conveyor::work_mode_test_callback(const std_msgs::UInt8MultiArray &msg)
 {
     int size = msg.data.size();
@@ -953,7 +1044,7 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
         conveyor_belt_t conveyor_belt_ack;
         if(id.CanID_Struct.ACK == 0)
         {
-            if(msg->DataLen == 1)
+            if(msg->DataLen <= 2)
             {
                 std::string mode;
                 ROS_INFO("MCU upload: CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE");
