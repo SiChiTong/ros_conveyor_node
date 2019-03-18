@@ -868,7 +868,7 @@ void Conveyor::ack_lock_ctrl(const std::string &msg, int err_code)
             {"sub_name", "conveyor_lock_ctrl_ack"},
                 {"data",
                     {
-                        {"lock_ctrl", msg.c_str()},
+                        {"lock_status", msg.c_str()},
                         {"error_code", err_code},
                 }
             }
