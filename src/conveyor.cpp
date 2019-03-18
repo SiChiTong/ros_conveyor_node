@@ -748,6 +748,26 @@ int Conveyor::ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num)
 }
 
 
+void Conveyor::post_pho_state(uint32_t state)
+{
+    json j;
+    j.clear();
+    j =
+        {
+            {"pho_state", state},
+        };
+
+    std_msgs::String json_msg;
+    std::stringstream ss;
+
+    ss.clear();
+    ss << j;
+    json_msg.data = ss.str();
+    this->pub_pho_state.publish(json_msg);
+}
+
+
+
 void Conveyor::pub_json_msg( const nlohmann::json j_msg)
 {
     std_msgs::String json_msg;
@@ -1146,6 +1166,30 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
             } while (0);
 
             this->sys_conveyor->lock_status_ack = lock_ctrl;
+        }
+    }
+
+
+
+    if(id.CanID_Struct.SourceID == CAN_SOURCE_ID_GET_PHO_ELEC_SWITCH_STATE)
+    {
+        ROS_INFO("rcv from mcu,source id CAN_SOURCE_ID_GET_PHO_ELEC_SWITCH_STATE");
+        uint8_t pho_state = 0;
+        if(id.CanID_Struct.ACK == 0)
+        {
+            if(msg->DataLen <= 2)
+            {
+                can_upload_ack_t can_upload_ack = {0};
+                uint8_t pho_state = msg->Data[0];
+                can_upload_ack.serial_num = msg->Data[msg->DataLen - 1];
+                ROS_WARN("get pho state: %d", pho_state);
+                ROS_INFO("get serial num: %d", can_upload_ack.serial_num);
+                can_upload_ack.id.CanID_Struct.ACK = 1;
+                can_upload_ack.id.CanID_Struct.SourceID = CAN_SOURCE_ID_GET_PHO_ELEC_SWITCH_STATE;
+                this->ack_mcu_upload(can_upload_ack.id, can_upload_ack.serial_num);
+                this->post_pho_state(pho_state);
+            }
+
         }
     }
 }

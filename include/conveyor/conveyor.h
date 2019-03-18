@@ -134,6 +134,8 @@ class Conveyor
             sub_conveyor_lock_ctrl = n.subscribe("/conveyor_lock_ctrl", 1000, &Conveyor::lock_ctrl_callback, this);
             pub_conveyor_work_mode_ack = n.advertise<std_msgs::String>("conveyor_ctrl_ack", 1000);
             pub_conveyor_lock_ctrl_ack = n.advertise<std_msgs::String>("conveyor_lock_ctrl_ack", 1000);
+            pub_pho_state = n.advertise<std_msgs::String>("conveyor/pho_state", 1000);
+
 
 
             sys_conveyor = &sys_conveyor_ram;
@@ -155,6 +157,7 @@ class Conveyor
         void ack_work_mode_start_result(const std::string &msg, int err_code);
         void ack_work_mode_exec_result(const std::string &msg, int err_code);
         void ack_lock_ctrl(const std::string &msg, int err_code);
+        void post_pho_state(uint32_t state);
         int ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num);
         void pub_json_msg(const nlohmann::json j_msg);
 
@@ -187,6 +190,7 @@ class Conveyor
         ros::Subscriber sub_conveyor_lock_ctrl;
         ros::Publisher pub_conveyor_work_mode_ack;
         ros::Publisher pub_conveyor_lock_ctrl_ack;
+        ros::Publisher pub_pho_state;
 
         conveyor_t    sys_conveyor_ram;
 
