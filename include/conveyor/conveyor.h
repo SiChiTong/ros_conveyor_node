@@ -94,6 +94,13 @@ typedef struct
     uint8_t status;
 }lock_ctrl_t;
 
+
+typedef struct
+{
+    uint8_t serial_num;
+    CAN_ID_UNION id;
+}can_upload_ack_t;
+
 typedef struct
 {
 #define VERSION_TYPE_FW             0
@@ -148,6 +155,7 @@ class Conveyor
         void ack_work_mode_start_result(const std::string &msg, int err_code);
         void ack_work_mode_exec_result(const std::string &msg, int err_code);
         void ack_lock_ctrl(const std::string &msg, int err_code);
+        int ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num);
         void pub_json_msg(const nlohmann::json j_msg);
 
         json j;

@@ -725,6 +725,29 @@ int Conveyor::set_lock_status(uint8_t status)
 }
 
 
+
+int Conveyor::ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num)
+{
+    ROS_INFO("start to ack mcu upload info. . . ");
+    int error = 0;
+    mrobot_msgs::vci_can can_msg;
+
+    id.CanID_Struct.SrcMACID = 0;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.FUNC_ID = 0x02;
+    id.CanID_Struct.ACK = 1;
+    id.CanID_Struct.res = 0;
+
+    can_msg.ID = id.CANx_ID;
+    can_msg.DataLen = 2;
+    can_msg.Data.resize(2);
+    can_msg.Data[0] = 0x00;
+    can_msg.Data[1] = serial_num;
+    this->pub_to_can_node.publish(can_msg);
+    return error;
+}
+
+
 void Conveyor::pub_json_msg( const nlohmann::json j_msg)
 {
     std_msgs::String json_msg;
@@ -1047,6 +1070,8 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
             if(msg->DataLen <= 2)
             {
                 std::string mode;
+                uint8_t flag = 1;
+
                 ROS_INFO("MCU upload: CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE");
                 conveyor_belt_ack.set_result = msg->Data[0];
                 if(conveyor_belt_ack.set_result == CONVEYOR_BELT_LOAD_TIMEOUT)
@@ -1072,6 +1097,16 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
                 else
                 {
                     ROS_ERROR("mcu upload state error: msg->Data[0]: %d ! !", msg->Data[0]);
+                    flag = 0;
+                }
+                if(flag == 1)
+                {
+                    can_upload_ack_t can_upload_ack = {0};
+                    can_upload_ack.serial_num = msg->Data[msg->DataLen - 1];
+                    ROS_INFO("serial num: %d", can_upload_ack.serial_num);
+                    can_upload_ack.id.CanID_Struct.ACK = 1;
+                    can_upload_ack.id.CanID_Struct.SourceID = CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE;
+                    this->ack_mcu_upload(can_upload_ack.id, can_upload_ack.serial_num);
                 }
             }
             else
