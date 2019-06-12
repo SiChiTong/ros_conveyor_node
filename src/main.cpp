@@ -27,6 +27,7 @@ int main(int argc, char **argv)
 
     get_version_t get_version;
     conveyor_belt_t set_conveyor_belt_work_mode;
+    sanwei_rfid_id_t sanwei_rfid_id = {0};
 
     get_version.get_version_type = 1;
 
@@ -51,6 +52,7 @@ int main(int argc, char **argv)
 
                     get_version.get_version_type = 3;
                     conveyor->get_version_vector.push_back(get_version);
+                    conveyor->get_sanwei_rfid_id_vector.push_back(sanwei_rfid_id);
 
                     //conveyor->set_conveyor_belt_work_mode_vector.push_back(set_conveyor_belt_work_mode);
 
