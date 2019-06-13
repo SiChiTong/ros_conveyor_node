@@ -17,11 +17,13 @@
 #define SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT    500//ms
 #define LOCK_CTRL_TIME_OUT                      500//ms
 #define GET_SANWEI_RFID_ID_TIME_OUT             500//ms
+#define WRITE_SANWEI_RFID_INFO_TIME_OUT             500//ms
 
 #define GET_VERSION_RETRY_CNT                   5
 #define SET_CONVEYOR_BELT_WORK_MODE_RETRY_CNT   5
 #define LOCK_CTRL_RETRY_CNT                     5
 #define GET_SANWEI_RFID_ID_RETRY_CNT            5
+#define WRITE_SANWEI_RFID_INFO_RETRY_CNT        5
 void *CanProtocolProcess(void* arg)
 {
     get_sys_status_t get_sys_status;
@@ -29,6 +31,7 @@ void *CanProtocolProcess(void* arg)
     conveyor_belt_t set_conveyor_belt_mode;
     sanwei_rfid_id_t get_sanwei_rfid_id;
     lock_ctrl_t lock_ctrl;
+    sanwei_rfid_info_t write_sanwei_rfid_info;
 
     Conveyor *pConveyor =  (Conveyor*)arg;
 
@@ -37,6 +40,7 @@ void *CanProtocolProcess(void* arg)
     bool set_conveyor_belt_flag = 0;
     bool get_sanwei_rfid_flag = 0;
     bool lock_ctrl_flag = 0;
+    bool write_sanwei_rfid_info_flag = 0;
     while(ros::ok())
     {
 
@@ -748,6 +752,165 @@ get_sanwei_rfid_id_restart:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /* --------  write sanwei's rfid info protocol begin -------- */
+        do
+        {
+            boost::mutex::scoped_lock(mtx);
+            if(!pConveyor->write_sanwei_rfid_info_vector.empty())
+            {
+                auto a = pConveyor->write_sanwei_rfid_info_vector.begin();
+                write_sanwei_rfid_info = *a;
+                {
+                    write_sanwei_rfid_info_flag = 1;
+                }
+
+                pConveyor->write_sanwei_rfid_info_vector.erase(a);
+
+            }
+
+        }while(0);
+
+        if(write_sanwei_rfid_info_flag == 1)
+        {
+            uint8_t flag = 0;
+            uint32_t time_out_cnt = 0;
+            static uint8_t err_cnt = 0;
+
+            write_sanwei_rfid_info_flag = 0;
+
+            if(pConveyor->is_log_on == true)
+            {
+                ROS_INFO("write sanwei rfid info: dst_id:0x%x,  src_id:0x%x, time:0x%x", write_sanwei_rfid_info.dst_id, write_sanwei_rfid_info.src_id, write_sanwei_rfid_info.time);
+            }
+            do
+            {
+                boost::mutex::scoped_lock(mtx);
+                pConveyor->sanwei_rfid_info_ack_vector.clear();
+            }while(0);
+
+write_sanwei_rfid_info_restart:
+            if(pConveyor->is_log_on == true)
+            {
+                ROS_INFO("write sanwei's rfid info :send cmd to mcu");
+            }
+            pConveyor->sys_conveyor->sanwei_rfid_info = write_sanwei_rfid_info;
+
+            pConveyor->write_sanwei_rfid_info_func(write_sanwei_rfid_info.dst_id, write_sanwei_rfid_info.src_id, write_sanwei_rfid_info.time);
+            bool write_sanwei_rfid_info_ack_flag = 0;
+            sanwei_rfid_info_t write_sanwei_rfid_info_ack;
+            while(time_out_cnt < WRITE_SANWEI_RFID_INFO_TIME_OUT / 10)
+            {
+                time_out_cnt++;
+                do
+                {
+                    boost::mutex::scoped_lock(mtx);
+                    if(!pConveyor->sanwei_rfid_info_ack_vector.empty())
+                    {
+                        if(pConveyor->is_log_on == true)
+                        {
+                            ROS_INFO("sanwei_rfid_info_ack_vector is not empty");
+                        }
+                        auto b = pConveyor->sanwei_rfid_info_ack_vector.begin();
+
+                        write_sanwei_rfid_info_ack = *b;
+
+                        pConveyor->sanwei_rfid_info_ack_vector.erase(b);
+
+                        if(write_sanwei_rfid_info_ack.result == 1)
+                        {
+                            write_sanwei_rfid_info_ack_flag = 1;
+                            if (pConveyor->is_log_on == true)
+                            {
+                                ROS_INFO("get right write sanwei rfid info ack");
+                            }
+                        }
+                        else
+                        {
+                            ROS_ERROR("write sanwei's rfid info: mcu report write error");
+                        }
+                    }
+                }while(0);
+                if(write_sanwei_rfid_info_ack_flag == 1)
+                {
+                    std::string mode;
+                    write_sanwei_rfid_info_ack_flag = 0;
+                    break;
+                }
+                else
+                {
+                    usleep(10*1000);
+                }
+            }
+            if(time_out_cnt < WRITE_SANWEI_RFID_INFO_TIME_OUT / 10)
+            {
+                err_cnt = 0;
+                time_out_cnt = 0;
+            }
+            else
+            {
+                ROS_ERROR("set conveyor belt work mode time out");
+                time_out_cnt = 0;
+                if(err_cnt++ < WRITE_SANWEI_RFID_INFO_RETRY_CNT)
+                {
+                    ROS_ERROR("write sanwei's rfid info start to resend msg....");
+                    goto write_sanwei_rfid_info_restart;
+                }
+                ROS_ERROR("CAN NOT COMMUNICATE with conveyor mcu, write sanwei's rfid info failed !");
+                err_cnt = 0;
+            }
+
+        }
+        /* --------  write sanwei's rfid info protocol end -------- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         usleep(10 * 1000);
     }
 }
@@ -904,6 +1067,41 @@ int Conveyor::get_sanwei_rfid_func(void)
     this->pub_to_can_node.publish(can_msg);
     return error;
 }
+
+
+
+int Conveyor::write_sanwei_rfid_info_func(uint16_t dst_id, uint16_t src_id, uint16_t time)
+{
+    ROS_INFO("start to write sanwei rfid info . . . ");
+    int error = 0;
+    mrobot_msgs::vci_can can_msg;
+    CAN_ID_UNION id;
+    memset(&id, 0x0, sizeof(CAN_ID_UNION));
+    id.CanID_Struct.SourceID = CAN_SOURCE_ID_WRITE_SANWEI_RFID_INFO;
+    id.CanID_Struct.SrcMACID = 0;
+    id.CanID_Struct.DestMACID = CONVEYOR_CAN_SRCMAC_ID;
+    id.CanID_Struct.FUNC_ID = 0x02;
+    id.CanID_Struct.ACK = 0;
+    id.CanID_Struct.res = 0;
+
+    can_msg.ID = id.CANx_ID;
+    can_msg.DataLen = 8;
+    can_msg.Data.resize(8);
+    can_msg.Data[0] = 0x00;
+    can_msg.Data[0] = 0x00;
+    can_msg.Data[2] = dst_id >> 8;
+    can_msg.Data[3] = dst_id & 0xff;
+
+    can_msg.Data[4] = src_id >> 8;
+    can_msg.Data[5] = src_id & 0xff;
+
+    can_msg.Data[6] = time >> 8;
+    can_msg.Data[7] = time & 0xff;
+
+    this->pub_to_can_node.publish(can_msg);
+    return error;
+}
+
 
 int Conveyor::ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num)
 {
@@ -1393,4 +1591,29 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
 
         }
     }
+
+
+
+    if(id.CanID_Struct.SourceID == CAN_SOURCE_ID_WRITE_SANWEI_RFID_INFO)
+    {
+        ROS_INFO("rcv from mcu,source id CAN_SOURCE_ID_WRITE_SANWEI_RFID_INFO");
+        uint8_t pho_state = 0;
+        if(id.CanID_Struct.ACK == 1)
+        {
+            sanwei_rfid_info_t sanwei_rfid_info = {0};
+            if(msg->DataLen == 1)
+            {
+                sanwei_rfid_info.result = msg->Data[0];
+                do
+                {
+                    boost::mutex::scoped_lock(this->mtx);
+                    this->sanwei_rfid_info_ack_vector.push_back(sanwei_rfid_info);
+                } while (0);
+            }
+
+        }
+    }
+
+
+
 }

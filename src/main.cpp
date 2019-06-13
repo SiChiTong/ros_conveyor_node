@@ -28,6 +28,7 @@ int main(int argc, char **argv)
     get_version_t get_version;
     conveyor_belt_t set_conveyor_belt_work_mode;
     sanwei_rfid_id_t sanwei_rfid_id = {0};
+    sanwei_rfid_info_t sanwei_rfid_info = {0};
 
     get_version.get_version_type = 1;
 
@@ -53,6 +54,13 @@ int main(int argc, char **argv)
                     get_version.get_version_type = 3;
                     conveyor->get_version_vector.push_back(get_version);
                     conveyor->get_sanwei_rfid_id_vector.push_back(sanwei_rfid_id);
+
+
+                    sanwei_rfid_info.src_id = 0x7788;
+                    sanwei_rfid_info.dst_id = 0x9999;
+                    sanwei_rfid_info.time = 0x3333;
+
+                    conveyor->write_sanwei_rfid_info_vector.push_back(sanwei_rfid_info);
 
                     //conveyor->set_conveyor_belt_work_mode_vector.push_back(set_conveyor_belt_work_mode);
 
