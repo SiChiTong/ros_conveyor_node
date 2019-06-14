@@ -4,6 +4,7 @@
 #include <mrobot_msgs/vci_can.h>
 #include <roscan/can_long_frame.h>
 #include <boost/thread/mutex.hpp>
+#include <mrobot_srvs/JString.h>
 using json = nlohmann::json;
 #ifndef __DRIVER_CONVEYOR_H__
 #define __DRIVER_CONVEYOR_H__
@@ -154,6 +155,7 @@ class Conveyor
             pub_conveyor_lock_ctrl_ack = n.advertise<std_msgs::String>("conveyor_lock_ctrl_ack", 1000);
             pub_pho_state = n.advertise<std_msgs::String>("conveyor/pho_state", 1000);
 
+            rfid_info_service = n.advertiseService("/conveyor/rfid_info", &Conveyor::service_rfid_ctrl, this);
 
 
             sys_conveyor = &sys_conveyor_ram;
@@ -161,6 +163,9 @@ class Conveyor
 
             get_sys_status_vector.clear();
             get_version_vector.clear();
+
+            get_rfid_id_flag = 0;
+            write_rfid_info_flag = 0;
         }
         int conveyorParamInit(void);
         int GetVersion(conveyor_t *sys);
@@ -170,6 +175,7 @@ class Conveyor
         int get_sanwei_rfid_func(void);
         int write_sanwei_rfid_info_func(uint16_t dst_id, uint16_t src_id, uint16_t time);
 
+        bool service_rfid_ctrl(mrobot_srvs::JString::Request &ctrl, mrobot_srvs::JString::Response &status);
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
         void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
         void work_mode_callback(const std_msgs::String::ConstPtr &msg);
@@ -184,6 +190,9 @@ class Conveyor
         json j;
         conveyor_t    *sys_conveyor;
         can_long_frame  long_frame;
+
+        uint32_t get_rfid_id_flag;
+        uint32_t write_rfid_info_flag;
 
         vector<get_sys_status_t>        get_sys_status_vector;
         vector<get_sys_status_ack_t>    get_sys_status_ack_vector;
@@ -219,12 +228,17 @@ class Conveyor
         ros::Publisher pub_conveyor_lock_ctrl_ack;
         ros::Publisher pub_pho_state;
 
+        ros::ServiceServer rfid_info_service;
+
         conveyor_t    sys_conveyor_ram;
 
         std::string software_version_param = "mcu_conveyor_version";
         std::string hardware_version_param = "conveyor_hardware_version";
         std::string protocol_version_param = "conveyor_protocol_version";
 
+        std_msgs::String json_to_String(const nlohmann::json j_msg);
+        std_msgs::String ack_get_rfid_id_service(int err_code, uint32_t id);
+        std_msgs::String ack_write_rfid_info_service(int err_code);
 };
 
 void *CanProtocolProcess(void* arg);

@@ -599,31 +599,6 @@ lock_ctrl_restart:
         /* -------- lock ctrl protocol end -------- */
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         /* --------  get sanwei rfid id protocol begin -------- */
         do
         {
@@ -691,6 +666,7 @@ get_sanwei_rfid_id_restart:
                         if(sanwei_rfid_id_ack.result == 1)
                         {
                             get_sanwei_rfid_id_ack_flag = 1;
+                            pConveyor->sys_conveyor->sanwei_rfid_id = sanwei_rfid_id_ack;
                             if (pConveyor->is_log_on == true)
                             {
                                 ROS_INFO("get right get_sanwei_rfid_id ack");
@@ -704,6 +680,8 @@ get_sanwei_rfid_id_restart:
                 }while(0);
                 if(get_sanwei_rfid_id_ack_flag == 1)
                 {
+                    get_sanwei_rfid_id_ack_flag = 0;
+                    pConveyor->get_rfid_id_flag = 1;
                     ROS_INFO("get sanwei rfid id: 0x%x", sanwei_rfid_id_ack.id);
                     /*
                     TODO:
@@ -735,36 +713,6 @@ get_sanwei_rfid_id_restart:
 
         }
         /* -----------  get sanwei rfid id protocol end ----------- */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
         /* --------  write sanwei's rfid info protocol begin -------- */
@@ -849,6 +797,7 @@ write_sanwei_rfid_info_restart:
                 {
                     std::string mode;
                     write_sanwei_rfid_info_ack_flag = 0;
+                    pConveyor->write_rfid_info_flag = 1;
                     break;
                 }
                 else
@@ -876,37 +825,6 @@ write_sanwei_rfid_info_restart:
 
         }
         /* --------  write sanwei's rfid info protocol end -------- */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1125,6 +1043,220 @@ int Conveyor::ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num)
 }
 
 
+
+std_msgs::String Conveyor::json_to_String(const nlohmann::json j_msg)
+{
+    std_msgs::String json_msg;
+    std::stringstream ss;
+
+    ss.clear();
+    ss << j_msg;
+    json_msg.data = ss.str();
+    return json_msg;
+}
+
+
+
+std_msgs::String Conveyor::ack_get_rfid_id_service(int err_code, uint32_t id)
+{
+    nlohmann::json j;
+    if(err_code == 0)
+    {
+        j =
+        {
+            {"result", "ok"},
+            {"id", id},
+        };
+        return this->json_to_String(j);
+    }
+    else if(err_code == 1)  //parameter error
+    {
+        j =
+        {
+            {"result", "parameter_err"},
+            {"id", id},
+        };
+        return this->json_to_String(j);
+    }
+    else if(err_code == 2)  //time out
+    {
+        j =
+        {
+            {"result", "time_out"},
+            {"id", id},
+        };
+        return this->json_to_String(j);
+    }
+}
+
+
+
+std_msgs::String Conveyor::ack_write_rfid_info_service(int err_code)
+{
+    nlohmann::json j;
+    if(err_code == 0)
+    {
+        j =
+        {
+            {"result", "ok"},
+        };
+        return this->json_to_String(j);
+    }
+    else if(err_code == 1)  //parameter error
+    {
+        j =
+        {
+            {"result", "parameter_err"},
+        };
+        return this->json_to_String(j);
+    }
+    else if(err_code == 2)  //time out
+    {
+        j =
+        {
+            {"result", "time_out"},
+        };
+        return this->json_to_String(j);
+    }
+}
+
+
+bool Conveyor::service_rfid_ctrl(mrobot_srvs::JString::Request  &ctrl, mrobot_srvs::JString::Response &status)
+{
+    auto j = json::parse(ctrl.request.c_str());
+    std::string j_str = j.dump();
+    nlohmann::json j_ack;
+    ROS_WARN("service: rfid info json data: %s", j_str.data());
+    ROS_INFO("%s: srv call",__func__);
+    if(j.find("pub_name") != j.end())
+    {
+        if(j["pub_name"] == "get_id")
+        {
+            sanwei_rfid_id_t sanwei_rfid_id = {0};
+            do
+            {
+                boost::mutex::scoped_lock(this->mtx);
+                this->get_sanwei_rfid_id_vector.push_back(sanwei_rfid_id);
+                this->get_rfid_id_flag = 0;
+            } while (0);
+
+            uint32_t cnt = 0;
+            while (!get_rfid_id_flag && (cnt < 400))
+            {
+                cnt++;
+                usleep(10 * 1000);
+                ros::spinOnce();
+            }
+            if (cnt < 200)
+            {
+                ROS_INFO("get rfid id response ok");
+
+                status.response = ack_get_rfid_id_service(0, this->sys_conveyor->sanwei_rfid_id.id).data;
+                status.success = true;
+                return true;
+            }
+            else
+            {
+                ROS_ERROR("get rfid id response timeout");
+                status.response = ack_get_rfid_id_service(2, 0).data;
+                status.success = false;
+                return true;
+            }
+        }
+
+        if(j["pub_name"] == "write_info")
+        {
+            sanwei_rfid_info_t sanwei_rfid_info = {0};
+            uint8_t hour = 0;
+            uint8_t minute = 0;
+            if(j["data"].find("dst_id") != j["data"].end())
+            {
+                sanwei_rfid_info.dst_id = j["data"]["dst_id"];
+                ROS_INFO("get dst_id: 0x%x", sanwei_rfid_info.dst_id);
+            }
+            else
+            {
+                status.response = ack_write_rfid_info_service(1).data;  //parameter error
+                status.success = false;
+                return true;
+            }
+
+            if(j["data"].find("src_id") != j["data"].end())
+            {
+                sanwei_rfid_info.src_id = j["data"]["src_id"];
+                ROS_INFO("get src_id: 0x%x", sanwei_rfid_info.src_id);
+            }
+            else
+            {
+                status.response = ack_write_rfid_info_service(1).data;  //parameter error
+                status.success = false;
+                return true;
+            }
+
+            if(j["data"].find("time") != j["data"].end())
+            {
+                if(j["data"]["time"].find("hour") != j["data"]["time"].end())
+                {
+                    hour = j["data"]["time"]["hour"];
+                    ROS_INFO("get time hour: %d", hour);
+                }
+                else
+                {
+                    ROS_ERROR("write rfid info response parameter err: didn't find hour in time");
+                    status.response = ack_write_rfid_info_service(1).data;
+                    status.success = false;
+                    return true;
+                }
+                if(j["data"]["time"].find("minute") != j["data"]["time"].end())
+                {
+                    minute = j["data"]["time"]["minute"];
+                    ROS_INFO("get time minute: %d", minute);
+                }
+                else
+                {
+                    ROS_ERROR("write rfid info response parameter err: didn't find minute in time");
+                    status.response = ack_write_rfid_info_service(1).data;
+                    status.success = false;
+                    return true;
+                }
+            }
+
+            sanwei_rfid_info.time = hour * 100 + minute;
+            do
+            {
+                boost::mutex::scoped_lock(this->mtx);
+                this->write_sanwei_rfid_info_vector.push_back(sanwei_rfid_info);
+                write_rfid_info_flag = 0;
+            } while (0);
+
+            uint32_t cnt = 0;
+            while (!write_rfid_info_flag && (cnt < 400))
+            {
+                cnt++;
+                usleep(10 * 1000);
+                ros::spinOnce();
+            }
+            if (cnt < 200)
+            {
+                ROS_INFO("write rfid response ok");
+                status.response = ack_write_rfid_info_service(0).data;  //parameter error
+                status.success = true;
+                return true;
+            }
+            else
+            {
+                ROS_ERROR("write rfid response timeout");
+                status.response = ack_write_rfid_info_service(2).data;  //parameter error
+                status.success = false;
+                return true;
+            }
+        }
+    }
+}
+
+
+
+
 void Conveyor::post_pho_state(uint32_t state)
 {
     json j;
@@ -1142,6 +1274,7 @@ void Conveyor::post_pho_state(uint32_t state)
     json_msg.data = ss.str();
     this->pub_pho_state.publish(json_msg);
 }
+
 
 
 
