@@ -27,6 +27,7 @@ using json = nlohmann::json;
 #define CAN_SOURCE_ID_LOCK_CTRL                     0xa2
 #define CAN_SOURCE_ID_GET_SANWEI_RFID_ID            0xa3
 #define CAN_SOURCE_ID_WRITE_SANWEI_RFID_INFO        0xa4
+#define CAN_SOURCE_ID_READ_SANWEI_RFID_INFO         0xa5
 
 #define HW_VERSION_SIZE             3
 #define SW_VERSION_SIZE             16
@@ -107,8 +108,11 @@ typedef struct
 typedef struct
 {
     uint8_t result;
+    uint16_t card_id;
+    uint16_t station_id;
     uint16_t dst_id;
     uint16_t src_id;
+    uint16_t service_id;
     uint16_t time;
 }sanwei_rfid_info_t;
 
@@ -134,6 +138,7 @@ typedef struct
     lock_ctrl_t                 lock_status_ack;
     sanwei_rfid_id_t            sanwei_rfid_id;
     sanwei_rfid_info_t          sanwei_rfid_info;
+    sanwei_rfid_info_t          read_sanwei_rfid_info;
 }conveyor_t;
 
 extern conveyor_t    *sys_conveyor;
@@ -166,6 +171,7 @@ class Conveyor
 
             get_rfid_id_flag = 0;
             write_rfid_info_flag = 0;
+            read_rfid_info_flag = 0;
         }
         int conveyorParamInit(void);
         int GetVersion(conveyor_t *sys);
@@ -174,6 +180,7 @@ class Conveyor
         int set_lock_status(uint8_t status);
         int get_sanwei_rfid_func(void);
         int write_sanwei_rfid_info_func(uint16_t dst_id, uint16_t src_id, uint16_t time);
+        int read_sanwei_rfid_info_func(void);
 
         bool service_rfid_ctrl(mrobot_srvs::JString::Request &ctrl, mrobot_srvs::JString::Response &status);
         void rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &c_msg);
@@ -193,6 +200,7 @@ class Conveyor
 
         uint32_t get_rfid_id_flag;
         uint32_t write_rfid_info_flag;
+        uint32_t read_rfid_info_flag;
 
         vector<get_sys_status_t>        get_sys_status_vector;
         vector<get_sys_status_ack_t>    get_sys_status_ack_vector;
@@ -211,6 +219,9 @@ class Conveyor
 
         vector<sanwei_rfid_info_t>        write_sanwei_rfid_info_vector;
         vector<sanwei_rfid_info_t>        sanwei_rfid_info_ack_vector;
+
+        vector<sanwei_rfid_info_t>        read_sanwei_rfid_info_vector;
+        vector<sanwei_rfid_info_t>        read_sanwei_rfid_info_ack_vector;
 
 
         boost::mutex mtx;
