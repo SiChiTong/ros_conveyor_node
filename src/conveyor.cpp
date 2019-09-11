@@ -337,7 +337,9 @@ set_conveyor_belt_work_mode_restart:
             }
             pConveyor->sys_conveyor->conveyor_belt = set_conveyor_belt_mode;
 
-            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor->conveyor_belt.set_work_mode, pConveyor->sys_conveyor->conveyor_belt.need_lock);
+            pConveyor->set_conveyor_belt_work_mode(pConveyor->sys_conveyor->conveyor_belt.index, \
+                                                    pConveyor->sys_conveyor->conveyor_belt.set_work_mode, \
+                                                    pConveyor->sys_conveyor->conveyor_belt.need_lock);
             bool set_conveyor_belt_work_mode_ack_flag = 0;
             conveyor_belt_t set_conveyor_belt_work_mode_ack;
             while(time_out_cnt < SET_CONVEYOR_BELT_WORK_MODE_TIME_OUT / 10)
@@ -409,7 +411,7 @@ set_conveyor_belt_work_mode_restart:
                     if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_EXEC_OK)
                     {
                         ROS_INFO("conveyor belt exec ok");
-                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_EXEC_OK);
+                        pConveyor->ack_work_mode_start_result(set_conveyor_belt_work_mode_ack.index, mode, CONVEYOR_BELT_EXEC_OK);
                     }
 //                    else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_LOAD_TIMEOUT)
 //                    {
@@ -424,12 +426,12 @@ set_conveyor_belt_work_mode_restart:
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_OCCUPIED)
                     {
                         ROS_ERROR("conveyor belt is occupied !");
-                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_IS_OCCUPIED);
+                        pConveyor->ack_work_mode_start_result(set_conveyor_belt_work_mode_ack.index, mode, CONVEYOR_BELT_IS_OCCUPIED);
                     }
                     else if(set_conveyor_belt_work_mode_ack.err_status == CONVEYOR_BELT_IS_ALREADY_EMPTY)
                     {
                         ROS_ERROR("conveyor belt is already empty !");
-                        pConveyor->ack_work_mode_start_result(mode, CONVEYOR_BELT_IS_ALREADY_EMPTY);
+                        pConveyor->ack_work_mode_start_result(set_conveyor_belt_work_mode_ack.index, mode, CONVEYOR_BELT_IS_ALREADY_EMPTY);
                     }
                     else
                     {
@@ -509,7 +511,7 @@ lock_ctrl_restart:
             }
             pConveyor->sys_conveyor->lock_ctrl = lock_ctrl;
 
-            pConveyor->set_lock_status(pConveyor->sys_conveyor->lock_ctrl.status);
+            pConveyor->set_lock_status(pConveyor->sys_conveyor->conveyor_belt.index, pConveyor->sys_conveyor->lock_ctrl.status);
             bool lock_ctrl_ack_flag = 0;
             lock_ctrl_t lock_ctrl_ack;
             while(time_out_cnt < LOCK_CTRL_TIME_OUT / 10)
@@ -848,74 +850,6 @@ write_sanwei_rfid_info_restart:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         /* --------  read sanwei's rfid info protocol begin -------- */
         do
         {
@@ -1133,9 +1067,12 @@ int Conveyor::GetSysStatus(conveyor_t *sys)
     return error;
 }
 
-int Conveyor::set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock)
+int Conveyor::set_conveyor_belt_work_mode(uint8_t conveyor_index, uint8_t mode, uint8_t need_lock)
 {
     ROS_INFO("start to set conveyor belt work mode . . . ");
+    ROS_INFO("conveyor index: %d", conveyor_index);
+    ROS_INFO("work mode: %d", mode);
+    ROS_INFO("need lock: %d", need_lock);
     int error = 0;
     mrobot_msgs::vci_can can_msg;
     CAN_ID_UNION id;
@@ -1148,12 +1085,13 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock)
     id.CanID_Struct.res = 0;
 
     can_msg.ID = id.CANx_ID;
-    can_msg.DataLen = 3;
-    can_msg.Data.resize(3);
+    can_msg.DataLen = 4;
+    can_msg.Data.resize(4);
     can_msg.Data[0] = 0x00;
+    can_msg.Data[1] = conveyor_index;
     if((mode >= 0) && (mode < CONVEYOR_BELT_STATUS_MAX))
     {
-        can_msg.Data[1] = mode;
+        can_msg.Data[2] = mode;
     }
     else
     {
@@ -1162,7 +1100,7 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock)
     }
     if(need_lock < 2)
     {
-        can_msg.Data[2] = need_lock;
+        can_msg.Data[3] = need_lock;
     }
     else
     {
@@ -1176,7 +1114,7 @@ int Conveyor::set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock)
 }
 
 
-int Conveyor::set_lock_status(uint8_t status)
+int Conveyor::set_lock_status(uint8_t conveyor_index, uint8_t status)
 {
     ROS_INFO("start to set lock status . . . ");
     int error = 0;
@@ -1191,12 +1129,13 @@ int Conveyor::set_lock_status(uint8_t status)
     id.CanID_Struct.res = 0;
 
     can_msg.ID = id.CANx_ID;
-    can_msg.DataLen = 2;
-    can_msg.Data.resize(2);
+    can_msg.DataLen = 3;
+    can_msg.Data.resize(3);
     can_msg.Data[0] = 0x00;
+    can_msg.Data[1] = conveyor_index;
     if((status == LOCK_STATUS_LOCK) || (status == LOCK_STATUS_UNLOCK))
     {
-        can_msg.Data[1] = status;
+        can_msg.Data[2] = status;
         ROS_INFO("set lock ctrl: %d", status);
     }
     else
@@ -1566,7 +1505,7 @@ void Conveyor::pub_json_msg( const nlohmann::json j_msg)
     this->pub_conveyor_work_mode_ack.publish(json_msg);
 }
 
-void Conveyor::ack_work_mode_start_result(const std::string &mode, int err_code)
+void Conveyor::ack_work_mode_start_result(uint8_t conveyor_index, const std::string &mode, int err_code)
 {
     json j;
     j.clear();
@@ -1583,7 +1522,7 @@ void Conveyor::ack_work_mode_start_result(const std::string &mode, int err_code)
     this->pub_json_msg(j);
 }
 
-void Conveyor::ack_work_mode_exec_result(const std::string &msg, int err_code)
+void Conveyor::ack_work_mode_exec_result(uint8_t conveyor_index, const std::string &msg, int err_code)
 {
 
     json j;
@@ -1615,6 +1554,29 @@ void Conveyor::work_mode_callback(const std_msgs::String::ConstPtr &msg)
             {
                 if (j["data"].find("set_mode") != j["data"].end())
                 {
+                    if (j["data"].find("conveyor") != j["data"].end())
+                    {
+                        if(j["data"]["conveyor"] == "upper")
+                        {
+                            this->sys_conveyor->conveyor_belt.index = DECK_UPPER;
+                            conveyor_work_mode.index = DECK_UPPER;
+                            this->sys_conveyor->index = DECK_UPPER;
+                            ROS_INFO("%s: get conveyor index: upper", __func__);
+                        }
+                        else if(j["data"]["conveyor"] == "lower")
+                        {
+                            this->sys_conveyor->conveyor_belt.index = DECK_LOWER;
+                            conveyor_work_mode.index = DECK_LOWER;
+                            this->sys_conveyor->index = DECK_LOWER;
+                            ROS_INFO("%s: get conveyor index: lower", __func__);
+                        }
+                        else
+                        {
+                            ROS_ERROR("%s:set conveyor index parse error!", __func__);
+                            return;
+                        }
+                    }
+
                     if (j["data"].find("lock") != j["data"].end())
                     {
                         ROS_INFO("get lock");
@@ -1874,36 +1836,37 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
         conveyor_belt_t conveyor_belt_ack;
         if(id.CanID_Struct.ACK == 0)
         {
-            if(msg->DataLen <= 2)
+            if(msg->DataLen <= 3)
             {
                 std::string mode;
                 uint8_t flag = 1;
 
                 ROS_INFO("MCU upload: CAN_SOURCE_ID_SET_CONVEYOR_BELT_WORK_MODE");
-                conveyor_belt_ack.set_result = msg->Data[0];
+                conveyor_belt_ack.index = msg->Data[0];
+                conveyor_belt_ack.set_result = msg->Data[1];
                 if(conveyor_belt_ack.set_result == CONVEYOR_BELT_LOAD_TIMEOUT)
                 {
-                    ROS_ERROR("load time out ! !");
-                    this->ack_work_mode_exec_result(mode, CONVEYOR_BELT_LOAD_TIMEOUT);
+                    ROS_ERROR("conveyor index: %d , load time out ! !", conveyor_belt_ack.index);
+                    this->ack_work_mode_exec_result(conveyor_belt_ack.index, mode, CONVEYOR_BELT_LOAD_TIMEOUT);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_BELT_UNLOAD_TIMEOUT)
                 {
-                    ROS_ERROR("unload time out ! !");
-                    this->ack_work_mode_exec_result(mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
+                    ROS_ERROR("conveyor index: %d, unload time out ! !", conveyor_belt_ack.index);
+                    this->ack_work_mode_exec_result(conveyor_belt_ack.index, mode, CONVEYOR_BELT_UNLOAD_TIMEOUT);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_LOAD_FINISHED_OK)
                 {
-                    ROS_INFO("load exec finished ok.");
-                    this->ack_work_mode_exec_result(mode, CONVEYOR_LOAD_FINISHED_OK);
+                    ROS_INFO("conveyor index: %d, load exec finished ok.", conveyor_belt_ack.index);
+                    this->ack_work_mode_exec_result(conveyor_belt_ack.index, mode, CONVEYOR_LOAD_FINISHED_OK);
                 }
                 else if(conveyor_belt_ack.set_result == CONVEYOR_UNLOAD_FINISHED_OK)
                 {
-                    ROS_INFO("unload exec finished ok.");
-                    this->ack_work_mode_exec_result(mode, CONVEYOR_UNLOAD_FINISHED_OK);
+                    ROS_INFO("conveyor index: %d, unload exec finished ok.", conveyor_belt_ack.index);
+                    this->ack_work_mode_exec_result(conveyor_belt_ack.index, mode, CONVEYOR_UNLOAD_FINISHED_OK);
                 }
                 else
                 {
-                    ROS_ERROR("mcu upload state error: msg->Data[0]: %d ! !", msg->Data[0]);
+                    ROS_ERROR("mcu upload state error: msg->Data[0]: %d ! !", msg->Data[1]);
                     flag = 0;
                 }
                 if(flag == 1)
@@ -1918,14 +1881,18 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
             }
             else
             {
-                ROS_ERROR("can data len error ! data len: %d", msg->DataLen);
+                ROS_ERROR("conveyor index: %d, can data len error ! data len: %d", conveyor_belt_ack.index, msg->DataLen);
             }
         }
         else
         {
-            conveyor_belt_ack.set_result = msg->Data[0];
-            conveyor_belt_ack.set_work_mode = msg->Data[1];
-            conveyor_belt_ack.err_status = msg->Data[2];
+            conveyor_belt_ack.index = msg->Data[0];
+            conveyor_belt_ack.set_result = msg->Data[1];
+            conveyor_belt_ack.set_work_mode = msg->Data[2];
+            conveyor_belt_ack.err_status = msg->Data[3];
+            ROS_INFO("get ack of conveyor ctrl");
+            ROS_INFO("conveyor index: %d,  result: %d, work mode: %d,  err status :%d",\
+                  conveyor_belt_ack.index, conveyor_belt_ack.set_result, conveyor_belt_ack.set_work_mode, conveyor_belt_ack.err_status);
             do
             {
                 boost::mutex::scoped_lock(this->mtx);
@@ -1942,10 +1909,11 @@ void Conveyor::rcv_from_can_node_callback(const mrobot_msgs::vci_can::ConstPtr &
     if(id.CanID_Struct.SourceID == CAN_SOURCE_ID_LOCK_CTRL)
     {
         ROS_INFO("rcv from mcu,source id CAN_SOURCE_ID_LOCK_CTRL");
-        lock_ctrl_t lock_ctrl;
+        lock_ctrl_t lock_ctrl = {0};
         if(id.CanID_Struct.ACK == 1)
         {
-            lock_ctrl.status = msg->Data[0];
+            lock_ctrl.index = msg->Data[0];
+            lock_ctrl.status = msg->Data[1];
             do
             {
                 boost::mutex::scoped_lock(this->mtx);

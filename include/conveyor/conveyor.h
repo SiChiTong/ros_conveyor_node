@@ -38,6 +38,14 @@ using json = nlohmann::json;
 #define CONVEYOR_WORK_MODE_STRING_UNLOAD        "unload"
 #define CONVEYOR_WORK_MODE_STRING_STOP          "stop"
 
+
+enum
+{
+    DECK_LOWER = 0,
+    DECK_UPPER,
+    DECK_MAX,
+};
+
 typedef struct
 {
     uint8_t reserve;
@@ -78,6 +86,7 @@ enum
 #define CONVEYOR_BELT_IS_ALREADY_EMPTY          0x82
 typedef struct
 {
+    uint8_t index;
     uint8_t set_work_mode;
     uint8_t need_lock;
     uint8_t set_result;
@@ -95,6 +104,7 @@ typedef struct
 #define LOCK_STATUS_UNLOCK                      0x00
 typedef struct
 {
+    uint8_t index;
     uint8_t status;
 }lock_ctrl_t;
 
@@ -132,7 +142,8 @@ typedef struct
     std::string                 sw_version;
     std::string                 protocol_version;
 
-    uint16_t                     sys_status;
+    uint16_t                    sys_status;
+    uint8_t                     index;
     conveyor_belt_t             conveyor_belt;
     lock_ctrl_t                 lock_ctrl;
     lock_ctrl_t                 lock_status_ack;
@@ -176,8 +187,8 @@ class Conveyor
         int conveyorParamInit(void);
         int GetVersion(conveyor_t *sys);
         int GetSysStatus(conveyor_t *sys);
-        int set_conveyor_belt_work_mode(uint8_t mode, uint8_t need_lock);
-        int set_lock_status(uint8_t status);
+        int set_conveyor_belt_work_mode(uint8_t conveyor_index, uint8_t mode, uint8_t need_lock);
+        int set_lock_status(uint8_t conveyor_index, uint8_t status);
         int get_sanwei_rfid_func(void);
         int write_sanwei_rfid_info_func(uint16_t dst_id, uint16_t src_id, uint16_t time);
         int read_sanwei_rfid_info_func(void);
@@ -187,8 +198,8 @@ class Conveyor
         void work_mode_test_callback(const std_msgs::UInt8MultiArray &msg);
         void work_mode_callback(const std_msgs::String::ConstPtr &msg);
         void lock_ctrl_callback(const std_msgs::String::ConstPtr &msg);
-        void ack_work_mode_start_result(const std::string &msg, int err_code);
-        void ack_work_mode_exec_result(const std::string &msg, int err_code);
+        void ack_work_mode_start_result(uint8_t conveyor_index, const std::string &msg, int err_code);
+        void ack_work_mode_exec_result(uint8_t conveyor_index, const std::string &msg, int err_code);
         void ack_lock_ctrl(const std::string &msg, int err_code);
         void post_pho_state(uint32_t state);
         int ack_mcu_upload(CAN_ID_UNION id, uint8_t serial_num);
